@@ -1,0 +1,903 @@
+openapi: "3.0.3"
+info:
+  title: コンビニトイレマップ API
+  description: |
+    コンビニのトイレ位置情報を共有・検索するWebアプリケーションのAPI。
+    認証基盤は Amazon Cognito。JWT を Authorization ヘッダーに付与。
+    画像保存は S3、画像審査は Amazon Rekognition、
+    ルート提案は Amazon Location Service + Amazon Bedrock。
+  version: "1.0.0"
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production (API Gateway + Lambda)
+
+tags:
+  - name: auth
+    description: 認証（Cognito）
+  - name: stores
+    description: コンビニ店舗検索
+  - name: toilets
+    description: トイレ情報の登録・取得
+  - name: reports
+    description: 虚偽報告（トイレなし報告）
+  - name: navigation
+    description: ルート提案・ナビゲーション
+  - name: notifications
+    description: プッシュ通知設定
+  - name: images
+    description: 画像アップロード
+
+paths:
+  # ============================================================
+  # 認証
+  # ============================================================
+  /auth/signup:
+    post:
+      tags: [auth]
+      summary: ユーザー新規登録
+      operationId: signUp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignUpRequest"
+      responses:
+        "201":
+          description: 登録成功（確認コード送信済み）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: メールアドレス重複
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/confirm:
+    post:
+      tags: [auth]
+      summary: メール確認コード検証
+      operationId: confirmSignUp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmSignUpRequest"
+      responses:
+        "200":
+          description: 確認成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: ログイン
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+        "401":
+          description: 認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: トークンリフレッシュ
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+      responses:
+        "200":
+          description: リフレッシュ成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: ログアウト
+      operationId: logout
+      security:
+        - cognitoAuth: []
+      responses:
+        "204":
+          description: ログアウト成功
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ============================================================
+  # 画像アップロード（S3 presigned URL 発行）
+  # ============================================================
+  /images/presigned-url:
+    post:
+      tags: [images]
+      summary: S3 presigned URL を発行
+      operationId: createPresignedUrl
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignedUrlRequest"
+      responses:
+        "200":
+          description: presigned URL 発行成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignedUrlResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ============================================================
+  # コンビニ店舗
+  # ============================================================
+  /stores:
+    get:
+      tags: [stores]
+      summary: 指定範囲内のコンビニ店舗一覧を取得
+      operationId: listStores
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+          description: 中心緯度
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+          description: 中心経度
+        - name: radius
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1000
+            minimum: 100
+            maximum: 5000
+          description: 検索半径（メートル）
+      responses:
+        "200":
+          description: 店舗一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stores]
+                properties:
+                  stores:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Store"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ============================================================
+  # トイレ情報
+  # ============================================================
+  /toilets:
+    post:
+      tags: [toilets]
+      summary: トイレ情報を投稿（画像はS3アップロード済みのキーを指定）
+      description: |
+        投稿後、Rekognition でトイレ画像かどうかを審査。
+        審査通過でマップに反映。不通過は 422 を返す。
+      operationId: createToilet
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateToiletRequest"
+      responses:
+        "201":
+          description: 投稿成功（審査通過・マップ反映済み）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Toilet"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: 画像がトイレと判定されなかった
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: [toilets]
+      summary: 指定範囲内のトイレ一覧を取得（マップ表示用）
+      operationId: listToilets
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+        - name: radius
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1000
+            minimum: 100
+            maximum: 5000
+      responses:
+        "200":
+          description: トイレ一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [toilets]
+                properties:
+                  toilets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Toilet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /toilets/{toiletId}:
+    get:
+      tags: [toilets]
+      summary: トイレ詳細を取得
+      operationId: getToilet
+      security:
+        - cognitoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/toiletId"
+      responses:
+        "200":
+          description: トイレ詳細
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Toilet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ============================================================
+  # 虚偽報告（トイレなし報告）
+  # ============================================================
+  /toilets/{toiletId}/reports:
+    post:
+      tags: [reports]
+      summary: トイレなし報告を送信（画像付き）
+      description: |
+        「トイレがない」証拠画像をS3にアップロード済みのキーを指定。
+        Rekognition で審査し、有効な報告として受理。
+        同一トイレに対して3件以上の有効報告でマップから自動削除。
+      operationId: createReport
+      security:
+        - cognitoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/toiletId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportRequest"
+      responses:
+        "201":
+          description: 報告受理
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: 画像が「トイレなし」の証拠と判定されなかった
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: [reports]
+      summary: 特定トイレへの報告一覧を取得
+      operationId: listReports
+      security:
+        - cognitoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/toiletId"
+      responses:
+        "200":
+          description: 報告一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reports]
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ============================================================
+  # ナビゲーション・ルート提案
+  # ============================================================
+  /navigation/route:
+    post:
+      tags: [navigation]
+      summary: 現在位置から最適なトイレルートをAIが提案
+      description: |
+        「今すぐトイレに行きたい！」ボタン用。
+        Amazon Location Service で経路計算、
+        Amazon Bedrock で提案文を生成して返す。
+      operationId: getRoute
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteRequest"
+      responses:
+        "200":
+          description: ルート提案
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: 周辺にトイレが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ============================================================
+  # プッシュ通知設定
+  # ============================================================
+  /notifications/device:
+    put:
+      tags: [notifications]
+      summary: デバイストークン登録・更新
+      description: |
+        プッシュ通知用のデバイストークンを登録。
+        周辺1km以内にトイレがないエリア進入時の通知に使用。
+      operationId: registerDevice
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceRegistrationRequest"
+      responses:
+        "200":
+          description: 登録成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [notifications]
+      summary: デバイストークン削除（通知停止）
+      operationId: unregisterDevice
+      security:
+        - cognitoAuth: []
+      responses:
+        "204":
+          description: 削除成功
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/location:
+    post:
+      tags: [notifications]
+      summary: 現在位置を送信してトイレ不在エリア判定
+      description: |
+        クライアントが定期的に現在位置を送信。
+        周辺1km以内にトイレが0件の場合、EventBridge経由で
+        プッシュ通知をトリガーする。
+      operationId: checkLocationAlert
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationCheckRequest"
+      responses:
+        "200":
+          description: 判定結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationCheckResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  # ============================================================
+  # セキュリティスキーム
+  # ============================================================
+  securitySchemes:
+    cognitoAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Amazon Cognito が発行する ID Token / Access Token
+
+  # ============================================================
+  # パラメータ
+  # ============================================================
+  parameters:
+    toiletId:
+      name: toiletId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: トイレID
+
+  # ============================================================
+  # 共通レスポンス
+  # ============================================================
+  responses:
+    BadRequest:
+      description: リクエスト不正
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: 認証エラー
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: リソースが見つからない
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  # ============================================================
+  # スキーマ
+  # ============================================================
+  schemas:
+    # --- 共通 ---
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "リクエストが不正です"
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: "処理が完了しました"
+
+    # --- 認証 ---
+    SignUpRequest:
+      type: object
+      required: [email, password, nickname]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 50
+
+    ConfirmSignUpRequest:
+      type: object
+      required: [email, confirmationCode]
+      properties:
+        email:
+          type: string
+          format: email
+        confirmationCode:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    AuthTokens:
+      type: object
+      required: [accessToken, idToken, refreshToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        idToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          description: アクセストークン有効期限（秒）
+
+    # --- 画像 ---
+    PresignedUrlRequest:
+      type: object
+      required: [contentType, purpose]
+      properties:
+        contentType:
+          type: string
+          enum:
+            - image/jpeg
+            - image/png
+            - image/webp
+          description: アップロードする画像のMIMEタイプ
+        purpose:
+          type: string
+          enum:
+            - toilet_registration
+            - toilet_report
+          description: 画像の用途
+
+    PresignedUrlResponse:
+      type: object
+      required: [uploadUrl, imageKey, expiresIn]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+          description: S3 presigned PUT URL
+        imageKey:
+          type: string
+          description: S3オブジェクトキー（投稿時に指定）
+        expiresIn:
+          type: integer
+          description: URL有効期限（秒）
+          example: 300
+
+    # --- 店舗 ---
+    Store:
+      type: object
+      required: [storeId, name, lat, lng, brand]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "セブン-イレブン 渋谷駅前店"
+        brand:
+          type: string
+          enum:
+            - seven_eleven
+            - family_mart
+            - lawson
+            - mini_stop
+            - daily_yamazaki
+            - other
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        address:
+          type: string
+        hasToilet:
+          type: boolean
+          description: トイレ情報が登録済みかどうか
+
+    # --- トイレ ---
+    CreateToiletRequest:
+      type: object
+      required: [storeId, imageKey, maleCount, femaleCount, multipurposeCount, requiresPermission]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+          description: コンビニ店舗ID
+        imageKey:
+          type: string
+          description: S3にアップロード済みの画像キー
+        maleCount:
+          type: integer
+          minimum: 0
+          description: 男性用トイレ個数
+        femaleCount:
+          type: integer
+          minimum: 0
+          description: 女性用トイレ個数
+        multipurposeCount:
+          type: integer
+          minimum: 0
+          description: 多目的トイレ個数
+        requiresPermission:
+          type: boolean
+          description: 店員への使用許可が必要か
+        note:
+          type: string
+          maxLength: 500
+          description: その他自由記入欄
+
+    Toilet:
+      type: object
+      required:
+        - toiletId
+        - storeId
+        - imageUrl
+        - maleCount
+        - femaleCount
+        - multipurposeCount
+        - requiresPermission
+        - status
+        - reportCount
+        - createdAt
+      properties:
+        toiletId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        imageUrl:
+          type: string
+          format: uri
+          description: トイレ画像URL
+        maleCount:
+          type: integer
+          minimum: 0
+        femaleCount:
+          type: integer
+          minimum: 0
+        multipurposeCount:
+          type: integer
+          minimum: 0
+        requiresPermission:
+          type: boolean
+        note:
+          type: string
+        status:
+          type: string
+          enum:
+            - active
+            - removed
+          description: active=マップ表示中, removed=虚偽報告により削除
+        reportCount:
+          type: integer
+          minimum: 0
+          description: 虚偽報告の件数
+        createdBy:
+          type: string
+          description: 投稿者ユーザーID
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # --- 虚偽報告 ---
+    CreateReportRequest:
+      type: object
+      required: [imageKey, reason]
+      properties:
+        imageKey:
+          type: string
+          description: 「トイレなし」証拠画像のS3キー
+        reason:
+          type: string
+          maxLength: 500
+          description: 報告理由
+
+    Report:
+      type: object
+      required: [reportId, toiletId, imageUrl, reason, status, createdAt]
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        toiletId:
+          type: string
+          format: uuid
+        imageUrl:
+          type: string
+          format: uri
+        reason:
+          type: string
+        status:
+          type: string
+          enum:
+            - accepted
+            - rejected
+          description: accepted=Rekognition審査通過, rejected=不通過
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # --- ナビゲーション ---
+    RouteRequest:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          format: double
+          description: 現在位置の緯度
+        lng:
+          type: number
+          format: double
+          description: 現在位置の経度
+        maxResults:
+          type: integer
+          default: 3
+          minimum: 1
+          maximum: 5
+          description: 提案するトイレの最大数
+
+    RouteResponse:
+      type: object
+      required: [suggestion, routes]
+      properties:
+        suggestion:
+          type: string
+          description: Bedrock が生成した提案文
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteDetail"
+
+    RouteDetail:
+      type: object
+      required: [toilet, distanceMeters, durationSeconds, polyline]
+      properties:
+        toilet:
+          $ref: "#/components/schemas/Toilet"
+        distanceMeters:
+          type: number
+          format: double
+          description: 距離（メートル）
+        durationSeconds:
+          type: integer
+          description: 所要時間（秒）
+        polyline:
+          type: string
+          description: エンコード済みポリライン（地図描画用）
+
+    # --- 通知 ---
+    DeviceRegistrationRequest:
+      type: object
+      required: [deviceToken, platform]
+      properties:
+        deviceToken:
+          type: string
+          description: FCM / APNs デバイストークン
+        platform:
+          type: string
+          enum:
+            - ios
+            - android
+            - web
+
+    LocationCheckRequest:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+
+    LocationCheckResponse:
+      type: object
+      required: [hasNearbyToilet, nearestToilet]
+      properties:
+        hasNearbyToilet:
+          type: boolean
+          description: 1km以内にトイレがあるか
+        nearestToilet:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Toilet"
+          description: 最寄りのトイレ（なければnull）
+        notificationSent:
+          type: boolean
+          description: トイレ不在通知を送信したか
