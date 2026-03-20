@@ -112,6 +112,52 @@
 - Bedrock（AI提案文生成）
 - EventBridge → End User Messaging Push（プッシュ通知）
 
+### デプロイ
+
+| 項目           | 技術                                |
+| -------------- | ----------------------------------- |
+| IaC            | AWS SAM（template.yaml）            |
+| ビルド         | `sam build`（Makefile経由でGoクロスコンパイル） |
+| デプロイ       | `sam deploy`                        |
+| リージョン     | us-east-1                           |
+| スタック名     | neptune-toilet-api                  |
+
+#### デプロイ手順
+
+```bash
+# ビルド
+sam build
+
+# デプロイ（初回は --guided）
+sam deploy --guided
+
+# 2回目以降（samconfig.toml に設定が保存される）
+sam deploy
+```
+
+#### 環境変数（Lambda）
+
+| 変数名          | 値                      | 設定場所         |
+| --------------- | ----------------------- | ---------------- |
+| S3_BUCKET_NAME  | neptune-toilet-images   | template.yaml    |
+
+#### S3バケットCORS設定
+
+フロントからの presigned URL PUT のため、S3バケットにCORS設定が必要：
+
+```bash
+aws s3api put-bucket-cors --bucket neptune-toilet-images --cors-configuration '{
+  "CORSRules": [{
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["PUT"],
+    "AllowedOrigins": ["http://localhost:3000"],
+    "ExposeHeaders": []
+  }]
+}'
+```
+
+> 本番フロントのURLが決まったら `AllowedOrigins` に追加すること。
+
 ---
 
 ## 5. データモデル（DynamoDB）
