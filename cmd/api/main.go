@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3" // S3用のパッケージを追加
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -18,7 +19,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// 1. AWSの設定を読み込む (ハッカソン用プロファイルを使用)
+	// 1. AWSの設定を読み込む
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithSharedConfigProfile("hackathon"),
 		config.WithRegion("us-east-1"),
@@ -27,8 +28,12 @@ func main() {
 		log.Fatalf("AWS設定の読み込みに失敗しました: %v", err)
 	}
 
-	// 2. DynamoDBクライアントを作成
+	// 2. 各サービス用のクライアント（窓口）を作成
 	dbClient := dynamodb.NewFromConfig(cfg)
+	s3Client := s3.NewFromConfig(cfg) // S3用のクライアントを新設
+
+	// 自分でAWSコンソールで作ったS3バケット名を入れてください
+	bucketName := "neptune-toilet-images" 
 
 	// 3. ルーター (chi) の設定
 	r := chi.NewRouter()
@@ -36,11 +41,10 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// 4. サーバー(Handler)の初期化
-	// DynamoDBクライアントを渡して、データベースを使えるようにします
-	server := handler.NewServer(dbClient)
+	// DynamoDBクライアント、S3クライアント、バケット名をセットで渡します
+	server := handler.NewServer(dbClient, s3Client, bucketName)
 
 	// 5. 自動生成されたAPI定義と自分たちの処理を紐付ける
-	// ここは元のコードの「正しい書き方」を維持しています
 	h := api.HandlerFromMux(api.NewStrictHandler(server, nil), r)
 
 	// 6. サーバー起動
