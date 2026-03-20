@@ -72,8 +72,19 @@ func (s *Server) ListToilets(ctx context.Context, request api.ListToiletsRequest
 		return nil, fmt.Errorf("failed to list toilets: %w", err)
 	}
 
+	searchLat := float64(request.Params.Lat)
+	searchLng := float64(request.Params.Lng)
+	searchRadius := 1000.0
+	if request.Params.Radius != nil {
+		searchRadius = float64(*request.Params.Radius)
+	}
+
 	apiToilets := make([]api.Toilet, 0, len(toilets))
 	for _, t := range toilets {
+		distance := calculateDistance(searchLat, searchLng, float64(t.Lat), float64(t.Lng))
+		if distance > searchRadius {
+			continue
+		}
 		apiToilets = append(apiToilets, toAPIToilet(ctx, s.presignClient, t, s.bucketName))
 	}
 
