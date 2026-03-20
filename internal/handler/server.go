@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 
 	api "github.com/Neptune-Progate-Hackathon-AWS/back/internal/api"
@@ -13,21 +15,42 @@ import (
 
 // Server は oapi-codegen が生成した StrictServerInterface を実装する。
 type Server struct {
-	toiletRepo *repository.ToiletRepository
+	presignClient *s3.PresignClient
+	bucketName    string
+	toiletRepo    *repository.ToiletRepository
 }
 
-func NewServer(toiletRepo *repository.ToiletRepository) *Server {
-	return &Server{toiletRepo: toiletRepo}
+func NewServer(s3Client *s3.Client, bucketName string, toiletRepo *repository.ToiletRepository) *Server {
+	return &Server{
+		presignClient: s3.NewPresignClient(s3Client),
+		bucketName:    bucketName,
+		toiletRepo:    toiletRepo,
+	}
 }
 
 // コンパイル時にインターフェース実装を保証する。
 var _ api.StrictServerInterface = (*Server)(nil)
 
-var errNotImplemented = fmt.Errorf("not implemented")
-
 // POST /images/presigned-url
 func (s *Server) CreatePresignedUrl(ctx context.Context, request api.CreatePresignedUrlRequestObject) (api.CreatePresignedUrlResponseObject, error) {
-	return nil, errNotImplemented
+	imageKey := fmt.Sprintf("uploads/%s", uuid.New().String())
+
+	presignedReq, err := s.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucketName),
+		Key:         aws.String(imageKey),
+		ContentType: aws.String(string(request.Body.ContentType)),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 5 * time.Minute
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign request: %w", err)
+	}
+
+	return api.CreatePresignedUrl200JSONResponse{
+		UploadUrl: presignedReq.URL,
+		ImageKey:  imageKey,
+		ExpiresIn: 300,
+	}, nil
 }
 
 // POST /toilets
@@ -39,15 +62,39 @@ func (s *Server) CreateToilet(ctx context.Context, request api.CreateToiletReque
 		return nil, fmt.Errorf("failed to create toilet: %w", err)
 	}
 
-	return toCreateResponse(t), nil
+	return api.CreateToilet201JSONResponse(toAPIToilet(t, s.bucketName)), nil
 }
 
 // GET /toilets
 func (s *Server) ListToilets(ctx context.Context, request api.ListToiletsRequestObject) (api.ListToiletsResponseObject, error) {
-	return nil, errNotImplemented
+	toilets, err := s.toiletRepo.FindAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list toilets: %w", err)
+	}
+
+	apiToilets := make([]api.Toilet, 0, len(toilets))
+	for _, t := range toilets {
+		apiToilets = append(apiToilets, toAPIToilet(t, s.bucketName))
+	}
+
+	return api.ListToilets200JSONResponse{Toilets: apiToilets}, nil
 }
 
 // GET /toilets/{toiletId}
 func (s *Server) GetToilet(ctx context.Context, request api.GetToiletRequestObject) (api.GetToiletResponseObject, error) {
-	return nil, errNotImplemented
+	t, err := s.toiletRepo.FindByID(ctx, request.ToiletId.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get toilet: %w", err)
+	}
+
+	if t == nil {
+		return api.GetToilet404JSONResponse{
+			NotFoundJSONResponse: api.NotFoundJSONResponse(api.Error{
+				Code:    "NOT_FOUND",
+				Message: "指定されたトイレが見つかりません",
+			}),
+		}, nil
+	}
+
+	return api.GetToilet200JSONResponse(toAPIToilet(*t, s.bucketName)), nil
 }

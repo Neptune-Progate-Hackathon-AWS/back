@@ -28,6 +28,12 @@ go.work.sum
 .env
 .env.local
 
+# Images
+*.jpg
+*.jpeg
+*.png
+*.gif
+
 # Claude Code
 .claude/
 **/CLAUDE.md

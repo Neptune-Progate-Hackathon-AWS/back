@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 
 	api "github.com/Neptune-Progate-Hackathon-AWS/back/internal/api"
@@ -30,17 +32,25 @@ func toToilet(req *api.CreateToiletRequest, id string) model.Toilet {
 	return t
 }
 
-// toCreateResponse は内部の model を API のレスポンスに変換する。
-func toCreateResponse(t model.Toilet) api.CreateToilet201JSONResponse {
+// toImageURL は S3 バケット名と画像キーから公開URLを組み立てる。
+func toImageURL(bucketName, imageKey string) string {
+	if imageKey == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucketName, imageKey)
+}
+
+// toAPIToilet は内部の model を API の Toilet 型に変換する。
+func toAPIToilet(t model.Toilet, bucketName string) api.Toilet {
 	toiletUUID, _ := uuid.Parse(t.ToiletID)
 
-	resp := api.CreateToilet201JSONResponse{
+	resp := api.Toilet{
 		ToiletId:           toiletUUID,
 		Name:               t.Name,
 		Brand:              api.ToiletBrand(t.Brand),
 		Lat:                t.Lat,
 		Lng:                t.Lng,
-		ImageUrl:           "", // TODO: S3のURLに変換
+		ImageUrl:           toImageURL(bucketName, t.ImageKey),
 		MaleCount:          t.MaleCount,
 		FemaleCount:        t.FemaleCount,
 		MultipurposeCount:  t.MultipurposeCount,

@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -34,10 +35,17 @@ func main() {
 		log.Fatalf("AWS設定の読み込みに失敗しました: %v", err)
 	}
 
-	// DynamoDBクライアント → Repository → Handler の順に組み立てる
+	// AWSクライアントとリポジトリの組み立て
 	dbClient := dynamodb.NewFromConfig(cfg)
+	s3Client := s3.NewFromConfig(cfg)
 	toiletRepo := repository.NewToiletRepository(dbClient)
-	server := handler.NewServer(toiletRepo)
+
+	bucketName := os.Getenv("S3_BUCKET_NAME")
+	if bucketName == "" {
+		log.Fatal("S3_BUCKET_NAME 環境変数が設定されていません")
+	}
+
+	server := handler.NewServer(s3Client, bucketName, toiletRepo)
 
 	// ルーター設定
 	r := chi.NewRouter()
