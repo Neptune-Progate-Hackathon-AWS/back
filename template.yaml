@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: コンビニトイレマップ API
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: bootstrap
+      CodeUri: .
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: neptune-toilet-images
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: ToiletsTable
+        - S3CrudPolicy:
+            BucketName: neptune-toilet-images
+      Events:
+        CatchAll:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+    Metadata:
+      BuildMethod: makefile
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

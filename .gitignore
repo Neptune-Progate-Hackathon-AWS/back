@@ -34,6 +34,9 @@ go.work.sum
 *.png
 *.gif
 
+# AWS SAM
+.aws-sam/
+
 # Claude Code
 .claude/
 **/CLAUDE.md

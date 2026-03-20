@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	chiadapter "github.com/awslabs/aws-lambda-go-api-proxy/chi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -60,9 +62,15 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	h := api.HandlerFromMux(api.NewStrictHandler(server, nil), r)
+	api.HandlerFromMux(api.NewStrictHandler(server, nil), r)
 
-	addr := ":8080"
-	fmt.Printf("Server listening on %s\n", addr)
-	log.Fatal(http.ListenAndServe(addr, h))
+	// Lambda環境ではLambdaハンドラーとして起動、それ以外はHTTPサーバー
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+		chiLambda := chiadapter.New(r)
+		lambda.Start(chiLambda.ProxyWithContext)
+	} else {
+		addr := ":8080"
+		fmt.Printf("Server listening on %s\n", addr)
+		log.Fatal(http.ListenAndServe(addr, r))
+	}
 }
