@@ -249,9 +249,7 @@ components:
         - brand
         - lat
         - lng
-        - maleCount
-        - femaleCount
-        - multipurposeCount
+        - toiletType
         - requiresPermission
       properties:
         name:
@@ -282,18 +280,10 @@ components:
         imageKey:
           type: string
           description: S3にアップロード済みの画像キー
-        maleCount:
-          type: integer
-          minimum: 0
-          description: 男性用トイレ個数
-        femaleCount:
-          type: integer
-          minimum: 0
-          description: 女性用トイレ個数
-        multipurposeCount:
-          type: integer
-          minimum: 0
-          description: 多目的トイレ個数
+        toiletType:
+          type: string
+          enum: [shared, separated]
+          description: "shared: 男女共用, separated: 男女別"
         requiresPermission:
           type: boolean
           description: 店員への使用許可が必要か
@@ -311,9 +301,7 @@ components:
         - lat
         - lng
         - imageUrl
-        - maleCount
-        - femaleCount
-        - multipurposeCount
+        - toiletType
         - requiresPermission
         - createdAt
       properties:
@@ -345,15 +333,10 @@ components:
           type: string
           format: uri
           description: トイレ画像URL
-        maleCount:
-          type: integer
-          minimum: 0
-        femaleCount:
-          type: integer
-          minimum: 0
-        multipurposeCount:
-          type: integer
-          minimum: 0
+        toiletType:
+          type: string
+          enum: [shared, separated]
+          description: "shared: 男女共用, separated: 男女別"
         requiresPermission:
           type: boolean
         note:

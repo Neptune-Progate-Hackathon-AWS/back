@@ -12,9 +12,7 @@ type Toilet struct {
 	Lat                float64   `dynamodbav:"lat"`
 	Lng                float64   `dynamodbav:"lng"`
 	ImageKey           string    `dynamodbav:"imageKey"`
-	MaleCount          int       `dynamodbav:"maleCount"`
-	FemaleCount        int       `dynamodbav:"femaleCount"`
-	MultipurposeCount  int       `dynamodbav:"multipurposeCount"`
+	ToiletType         string    `dynamodbav:"toiletType"`
 	RequiresPermission bool      `dynamodbav:"requiresPermission"`
 	Note               string    `dynamodbav:"note,omitempty"`
 	CreatedAt          time.Time `dynamodbav:"createdAt"`

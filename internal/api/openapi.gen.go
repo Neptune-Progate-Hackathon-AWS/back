@@ -57,6 +57,24 @@ func (e CreateToiletRequestBrand) Valid() bool {
 	}
 }
 
+// Defines values for CreateToiletRequestToiletType.
+const (
+	CreateToiletRequestToiletTypeSeparated CreateToiletRequestToiletType = "separated"
+	CreateToiletRequestToiletTypeShared    CreateToiletRequestToiletType = "shared"
+)
+
+// Valid indicates whether the value is a known member of the CreateToiletRequestToiletType enum.
+func (e CreateToiletRequestToiletType) Valid() bool {
+	switch e {
+	case CreateToiletRequestToiletTypeSeparated:
+		return true
+	case CreateToiletRequestToiletTypeShared:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PresignedUrlRequestContentType.
 const (
 	Imagejpeg PresignedUrlRequestContentType = "image/jpeg"
@@ -108,6 +126,24 @@ func (e ToiletBrand) Valid() bool {
 	}
 }
 
+// Defines values for ToiletToiletType.
+const (
+	ToiletToiletTypeSeparated ToiletToiletType = "separated"
+	ToiletToiletTypeShared    ToiletToiletType = "shared"
+)
+
+// Valid indicates whether the value is a known member of the ToiletToiletType enum.
+func (e ToiletToiletType) Valid() bool {
+	switch e {
+	case ToiletToiletTypeSeparated:
+		return true
+	case ToiletToiletTypeShared:
+		return true
+	default:
+		return false
+	}
+}
+
 // CreateToiletRequest defines model for CreateToiletRequest.
 type CreateToiletRequest struct {
 	// Address 住所
@@ -115,9 +151,6 @@ type CreateToiletRequest struct {
 
 	// Brand コンビニブランド
 	Brand CreateToiletRequestBrand `json:"brand"`
-
-	// FemaleCount 女性用トイレ個数
-	FemaleCount int `json:"femaleCount"`
 
 	// ImageKey S3にアップロード済みの画像キー
 	ImageKey *string `json:"imageKey,omitempty"`
@@ -128,12 +161,6 @@ type CreateToiletRequest struct {
 	// Lng 経度
 	Lng float64 `json:"lng"`
 
-	// MaleCount 男性用トイレ個数
-	MaleCount int `json:"maleCount"`
-
-	// MultipurposeCount 多目的トイレ個数
-	MultipurposeCount int `json:"multipurposeCount"`
-
 	// Name コンビニ店舗名
 	Name string `json:"name"`
 
@@ -142,10 +169,16 @@ type CreateToiletRequest struct {
 
 	// RequiresPermission 店員への使用許可が必要か
 	RequiresPermission bool `json:"requiresPermission"`
+
+	// ToiletType shared: 男女共用, separated: 男女別
+	ToiletType CreateToiletRequestToiletType `json:"toiletType"`
 }
 
 // CreateToiletRequestBrand コンビニブランド
 type CreateToiletRequestBrand string
+
+// CreateToiletRequestToiletType shared: 男女共用, separated: 男女別
+type CreateToiletRequestToiletType string
 
 // Error defines model for Error.
 type Error struct {
@@ -181,26 +214,29 @@ type Toilet struct {
 	CreatedAt time.Time   `json:"createdAt"`
 
 	// CreatedBy 投稿者ユーザーID
-	CreatedBy   *string `json:"createdBy,omitempty"`
-	FemaleCount int     `json:"femaleCount"`
+	CreatedBy *string `json:"createdBy,omitempty"`
 
 	// ImageUrl トイレ画像URL
-	ImageUrl          string  `json:"imageUrl"`
-	Lat               float64 `json:"lat"`
-	Lng               float64 `json:"lng"`
-	MaleCount         int     `json:"maleCount"`
-	MultipurposeCount int     `json:"multipurposeCount"`
+	ImageUrl string  `json:"imageUrl"`
+	Lat      float64 `json:"lat"`
+	Lng      float64 `json:"lng"`
 
 	// Name コンビニ店舗名
 	Name               string             `json:"name"`
 	Note               *string            `json:"note,omitempty"`
 	RequiresPermission bool               `json:"requiresPermission"`
 	ToiletId           openapi_types.UUID `json:"toiletId"`
-	UpdatedAt          *time.Time         `json:"updatedAt,omitempty"`
+
+	// ToiletType shared: 男女共用, separated: 男女別
+	ToiletType ToiletToiletType `json:"toiletType"`
+	UpdatedAt  *time.Time       `json:"updatedAt,omitempty"`
 }
 
 // ToiletBrand defines model for Toilet.Brand.
 type ToiletBrand string
+
+// ToiletToiletType shared: 男女共用, separated: 男女別
+type ToiletToiletType string
 
 // ToiletId defines model for toiletId.
 type ToiletId = openapi_types.UUID
@@ -840,41 +876,40 @@ func (sh *strictHandler) GetToilet(w http.ResponseWriter, r *http.Request, toile
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"Z7/XZBoAAA==",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

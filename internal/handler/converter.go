@@ -21,9 +21,7 @@ func toToilet(req *api.CreateToiletRequest, id string) model.Toilet {
 		Lat:                req.Lat,
 		Lng:                req.Lng,
 		ImageKey:           derefString(req.ImageKey),
-		MaleCount:          req.MaleCount,
-		FemaleCount:        req.FemaleCount,
-		MultipurposeCount:  req.MultipurposeCount,
+		ToiletType:         string(req.ToiletType),
 		RequiresPermission: req.RequiresPermission,
 	}
 	if req.Address != nil {
@@ -63,9 +61,7 @@ func toAPIToilet(ctx context.Context, presignClient *s3.PresignClient, t model.T
 		Lat:                t.Lat,
 		Lng:                t.Lng,
 		ImageUrl:           presignGetURL(ctx, presignClient, bucketName, t.ImageKey),
-		MaleCount:          t.MaleCount,
-		FemaleCount:        t.FemaleCount,
-		MultipurposeCount:  t.MultipurposeCount,
+		ToiletType:         api.ToiletToiletType(t.ToiletType),
 		RequiresPermission: t.RequiresPermission,
 		CreatedAt:          t.CreatedAt,
 	}
