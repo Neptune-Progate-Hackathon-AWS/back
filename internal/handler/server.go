@@ -102,8 +102,9 @@ func (s *Server) CreateToilet(ctx context.Context, request api.CreateToiletReque
 }
 
 // GET /toilets
-// 3. 【トイレ一覧取得】
+// 3. 【トイレ一覧取得】 GET /toilets
 func (s *Server) ListToilets(ctx context.Context, request api.ListToiletsRequestObject) (api.ListToiletsResponseObject, error) {
+	// 1. DynamoDBから全データを取得 (ハッカソンのMVP用としてまずはScanを使用)
 	output, err := s.dynamoClient.Scan(ctx, &dynamodb.ScanInput{
 		TableName: aws.String("ToiletsTable"),
 	})
@@ -111,11 +112,11 @@ func (s *Server) ListToilets(ctx context.Context, request api.ListToiletsRequest
 		return nil, fmt.Errorf("failed to scan: %w", err)
 	}
 
-	// DTOを修正：DBにあるけど api.Toilet にはない ImageKey を明示的に受け取る
+	// 2. DynamoDBのデータをGoで扱えるようにDTO（一時的な型）を定義
 	type toiletDTO struct {
 		api.Toilet
 		ToiletId string `dynamodbav:"toiletId"`
-		ImageKey string `dynamodbav:"imageKey"` // これを追加！
+		ImageKey string `dynamodbav:"imageKey"`
 	}
 
 	var dtos []toiletDTO
@@ -124,23 +125,52 @@ func (s *Server) ListToilets(ctx context.Context, request api.ListToiletsRequest
 	}
 
 	var toilets []api.Toilet
+
+	// 3. リクエストから検索条件を取り出す
+	// API設計(openapi.yml)で lat と lng は必須(required)なので、そのまま数値として使えます
+	searchLat := float64(request.Params.Lat)
+	searchLng := float64(request.Params.Lng)
+
+	// radius（半径）は省略可能なので、指定がない場合はデフォルト値(1000m)を使用
+	searchRadius := 1000.0
+	if request.Params.Radius != nil {
+		searchRadius = float64(*request.Params.Radius)
+	}
+
+	// 4. 取得したトイレを1つずつチェックして、条件に合うものだけを残す
 	for _, d := range dtos {
 		t := d.Toilet
-		// IDのパース
+
+		// UUIDのパース（文字列のIDを正式な型に変換）
 		if parsedID, err := uuid.Parse(d.ToiletId); err == nil {
 			t.ToiletId = parsedID
 		}
-		
-		// URLの組み立て：d.ImageKey を使います（t.ImageKey は存在しないため）
+
+		// S3の画像URLを組み立てる
 		if d.ImageKey != "" {
 			t.ImageUrl = fmt.Sprintf("https://%s.s3.us-east-1.amazonaws.com/%s", s.bucketName, d.ImageKey)
 		}
-		
+
+		// --- 距離の絞り込み処理 ---
+		toiletLat := float64(t.Lat)
+		toiletLng := float64(t.Lng)
+
+		// distance.go に書いたハバサイン公式の関数を呼び出して距離を計算
+		distance := calculateDistance(searchLat, searchLng, toiletLat, toiletLng)
+
+		// トイレまでの距離が、指定された検索半径(searchRadius)よりも遠い場合はスキップ
+		if distance > searchRadius {
+			continue // 配列に追加せず、次のトイレのチェックへ進む
+		}
+
+		// 条件をクリアしたトイレだけを配列に追加
 		toilets = append(toilets, t)
 	}
 
+	// 5. 絞り込まれた結果を返す
 	return api.ListToilets200JSONResponse{Toilets: toilets}, nil
 }
+
 
 // GET /toilets/{toiletId}
 // 4. 【トイレ詳細取得】 GET /toilets/{toiletId}
