@@ -109,3 +109,26 @@ func (s *Server) GetToilet(ctx context.Context, request api.GetToiletRequestObje
 
 	return api.GetToilet200JSONResponse(toAPIToilet(ctx, s.presignClient, *t, s.bucketName)), nil
 }
+
+// DELETE /toilets/{toiletId}
+func (s *Server) DeleteToilet(ctx context.Context, request api.DeleteToiletRequestObject) (api.DeleteToiletResponseObject, error) {
+	t, err := s.toiletRepo.FindByID(ctx, request.ToiletId.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get toilet: %w", err)
+	}
+
+	if t == nil {
+		return api.DeleteToilet404JSONResponse{
+			NotFoundJSONResponse: api.NotFoundJSONResponse(api.Error{
+				Code:    "NOT_FOUND",
+				Message: "指定されたトイレが見つかりません",
+			}),
+		}, nil
+	}
+
+	if err := s.toiletRepo.Delete(ctx, request.ToiletId.String()); err != nil {
+		return nil, fmt.Errorf("failed to delete toilet: %w", err)
+	}
+
+	return api.DeleteToilet204Response{}, nil
+}

@@ -121,6 +121,21 @@ paths:
           $ref: "#/components/responses/Unauthorized"
 
   /toilets/{toiletId}:
+    delete:
+      tags: [toilets]
+      summary: トイレ情報を削除
+      operationId: deleteToilet
+      security:
+        - cognitoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/toiletId"
+      responses:
+        "204":
+          description: 削除成功
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
     get:
       tags: [toilets]
       summary: トイレ詳細を取得

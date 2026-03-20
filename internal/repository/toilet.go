@@ -82,3 +82,17 @@ func (r *ToiletRepository) FindByID(ctx context.Context, id string) (*model.Toil
 
 	return &t, nil
 }
+
+// Delete は指定IDのトイレ情報を DynamoDB から削除する。
+func (r *ToiletRepository) Delete(ctx context.Context, id string) error {
+	_, err := r.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]types.AttributeValue{
+			"toiletId": &types.AttributeValueMemberS{Value: id},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete toilet from DynamoDB: %w", err)
+	}
+	return nil
+}
