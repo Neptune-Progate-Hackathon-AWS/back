@@ -249,7 +249,6 @@ components:
         - brand
         - lat
         - lng
-        - imageKey
         - maleCount
         - femaleCount
         - multipurposeCount

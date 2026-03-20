@@ -20,7 +20,7 @@ func toToilet(req *api.CreateToiletRequest, id string) model.Toilet {
 		Brand:              string(req.Brand),
 		Lat:                req.Lat,
 		Lng:                req.Lng,
-		ImageKey:           req.ImageKey,
+		ImageKey:           derefString(req.ImageKey),
 		MaleCount:          req.MaleCount,
 		FemaleCount:        req.FemaleCount,
 		MultipurposeCount:  req.MultipurposeCount,
@@ -76,4 +76,11 @@ func toAPIToilet(ctx context.Context, presignClient *s3.PresignClient, t model.T
 		resp.Note = &t.Note
 	}
 	return resp
+}
+
+func derefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }
