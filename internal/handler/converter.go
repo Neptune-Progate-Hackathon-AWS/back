@@ -1,8 +1,11 @@
 package handler
 
 import (
-	"fmt"
+	"context"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 
 	api "github.com/Neptune-Progate-Hackathon-AWS/back/internal/api"
@@ -32,16 +35,25 @@ func toToilet(req *api.CreateToiletRequest, id string) model.Toilet {
 	return t
 }
 
-// toImageURL は S3 バケット名と画像キーから公開URLを組み立てる。
-func toImageURL(bucketName, imageKey string) string {
+// presignGetURL は S3 の GET 用 Presigned URL を生成する。
+func presignGetURL(ctx context.Context, presignClient *s3.PresignClient, bucketName, imageKey string) string {
 	if imageKey == "" {
 		return ""
 	}
-	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucketName, imageKey)
+	req, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(imageKey),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 1 * time.Hour
+	})
+	if err != nil {
+		return ""
+	}
+	return req.URL
 }
 
 // toAPIToilet は内部の model を API の Toilet 型に変換する。
-func toAPIToilet(t model.Toilet, bucketName string) api.Toilet {
+func toAPIToilet(ctx context.Context, presignClient *s3.PresignClient, t model.Toilet, bucketName string) api.Toilet {
 	toiletUUID, _ := uuid.Parse(t.ToiletID)
 
 	resp := api.Toilet{
@@ -50,7 +62,7 @@ func toAPIToilet(t model.Toilet, bucketName string) api.Toilet {
 		Brand:              api.ToiletBrand(t.Brand),
 		Lat:                t.Lat,
 		Lng:                t.Lng,
-		ImageUrl:           toImageURL(bucketName, t.ImageKey),
+		ImageUrl:           presignGetURL(ctx, presignClient, bucketName, t.ImageKey),
 		MaleCount:          t.MaleCount,
 		FemaleCount:        t.FemaleCount,
 		MultipurposeCount:  t.MultipurposeCount,

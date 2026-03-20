@@ -62,7 +62,7 @@ func (s *Server) CreateToilet(ctx context.Context, request api.CreateToiletReque
 		return nil, fmt.Errorf("failed to create toilet: %w", err)
 	}
 
-	return api.CreateToilet201JSONResponse(toAPIToilet(t, s.bucketName)), nil
+	return api.CreateToilet201JSONResponse(toAPIToilet(ctx, s.presignClient, t, s.bucketName)), nil
 }
 
 // GET /toilets
@@ -74,7 +74,7 @@ func (s *Server) ListToilets(ctx context.Context, request api.ListToiletsRequest
 
 	apiToilets := make([]api.Toilet, 0, len(toilets))
 	for _, t := range toilets {
-		apiToilets = append(apiToilets, toAPIToilet(t, s.bucketName))
+		apiToilets = append(apiToilets, toAPIToilet(ctx, s.presignClient, t, s.bucketName))
 	}
 
 	return api.ListToilets200JSONResponse{Toilets: apiToilets}, nil
@@ -96,5 +96,5 @@ func (s *Server) GetToilet(ctx context.Context, request api.GetToiletRequestObje
 		}, nil
 	}
 
-	return api.GetToilet200JSONResponse(toAPIToilet(*t, s.bucketName)), nil
+	return api.GetToilet200JSONResponse(toAPIToilet(ctx, s.presignClient, *t, s.bucketName)), nil
 }
