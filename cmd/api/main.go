@@ -9,7 +9,9 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/location"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	chiadapter "github.com/awslabs/aws-lambda-go-api-proxy/chi"
 	"github.com/go-chi/chi/v5"
@@ -62,7 +64,24 @@ func main() {
 		log.Println("VAPID keys not set, Web Push disabled")
 	}
 
-	server := handler.NewServer(s3Client, bucketName, toiletRepo, reportRepo, subscriptionRepo, pushSvc)
+	// NavigationService: Location Service + Bedrock
+	locationClient := location.NewFromConfig(cfg)
+
+	bedrockRegion := os.Getenv("BEDROCK_REGION")
+	if bedrockRegion == "" {
+		bedrockRegion = "us-east-1"
+	}
+	bedrockClient := bedrockruntime.NewFromConfig(cfg, func(o *bedrockruntime.Options) {
+		o.Region = bedrockRegion
+	})
+
+	calculatorName := os.Getenv("ROUTE_CALCULATOR_NAME")
+	if calculatorName == "" {
+		calculatorName = "neptune-route-calculator"
+	}
+	navigationService := service.NewNavigationService(locationClient, bedrockClient, calculatorName)
+
+	server := handler.NewServer(s3Client, bucketName, toiletRepo, reportRepo, subscriptionRepo, pushSvc, navigationService)
 
 	// ルーター設定
 	r := chi.NewRouter()

@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	core "github.com/awslabs/aws-lambda-go-api-proxy/core"
 	"github.com/google/uuid"
 
 	api "github.com/Neptune-Progate-Hackathon-AWS/back/internal/api"
@@ -19,22 +20,24 @@ import (
 
 // Server は oapi-codegen が生成した StrictServerInterface を実装する。
 type Server struct {
-	presignClient    *s3.PresignClient
-	bucketName       string
-	toiletRepo       *repository.ToiletRepository
-	reportRepo       *repository.ReportRepository
-	subscriptionRepo *repository.SubscriptionRepository
-	pushService      *service.PushService
+	presignClient     *s3.PresignClient
+	bucketName        string
+	toiletRepo        *repository.ToiletRepository
+	reportRepo        *repository.ReportRepository
+	subscriptionRepo  *repository.SubscriptionRepository
+	pushService       *service.PushService
+	navigationService *service.NavigationService
 }
 
-func NewServer(s3Client *s3.Client, bucketName string, toiletRepo *repository.ToiletRepository, reportRepo *repository.ReportRepository, subscriptionRepo *repository.SubscriptionRepository, pushService *service.PushService) *Server {
+func NewServer(s3Client *s3.Client, bucketName string, toiletRepo *repository.ToiletRepository, reportRepo *repository.ReportRepository, subscriptionRepo *repository.SubscriptionRepository, pushService *service.PushService, navigationService *service.NavigationService) *Server {
 	return &Server{
-		presignClient:    s3.NewPresignClient(s3Client),
-		bucketName:       bucketName,
-		toiletRepo:       toiletRepo,
-		reportRepo:       reportRepo,
-		subscriptionRepo: subscriptionRepo,
-		pushService:      pushService,
+		presignClient:     s3.NewPresignClient(s3Client),
+		bucketName:        bucketName,
+		toiletRepo:        toiletRepo,
+		reportRepo:        reportRepo,
+		subscriptionRepo:  subscriptionRepo,
+		pushService:       pushService,
+		navigationService: navigationService,
 	}
 }
 
@@ -164,7 +167,6 @@ func (s *Server) CreateReport(ctx context.Context, request api.CreateReportReque
 		}, nil
 	}
 
-	// TODO: JWT から userID を取得する。現在は仮実装。
 	userID := extractUserID(ctx)
 
 	// 重複チェック
@@ -233,11 +235,20 @@ func (s *Server) GetReportCount(ctx context.Context, request api.GetReportCountR
 }
 
 // extractUserID はコンテキストからユーザーIDを取得する。
-// API Gateway の Cognito Authorizer が設定した値を利用する。
-// ローカル開発時は "anonymous" を返す。
+// API Gateway の Cognito Authorizer が設定した sub claim を利用する。
+// ローカル開発時や認証情報がない場合は "anonymous" を返す。
 func extractUserID(ctx context.Context) string {
-	// TODO: API Gateway の Cognito Authorizer から sub claim を取得する実装
-	// 現時点ではヘッダーから取得する簡易実装
-	_ = ctx
-	return "anonymous"
+	gatewayCtx, ok := core.GetAPIGatewayContextFromContext(ctx)
+	if !ok {
+		return "anonymous"
+	}
+	sub, ok := gatewayCtx.Authorizer["sub"]
+	if !ok {
+		return "anonymous"
+	}
+	subStr, ok := sub.(string)
+	if !ok || subStr == "" {
+		return "anonymous"
+	}
+	return subStr
 }

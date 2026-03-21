@@ -21,6 +21,8 @@ Resources:
           S3_BUCKET_NAME: neptune-toilet-images
           VAPID_PUBLIC_KEY: !Ref VapidPublicKey
           VAPID_PRIVATE_KEY: !Ref VapidPrivateKey
+          ROUTE_CALCULATOR_NAME: !Ref RouteCalculator
+          BEDROCK_REGION: us-east-1
       Policies:
         - DynamoDBCrudPolicy:
             TableName: ToiletsTable
@@ -30,6 +32,13 @@ Resources:
             TableName: !Ref SubscriptionsTable
         - S3CrudPolicy:
             BucketName: neptune-toilet-images
+        - Statement:
+            - Effect: Allow
+              Action: geo:CalculateRoute
+              Resource: !GetAtt RouteCalculator.Arn
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
       Events:
         CatchAll:
           Type: Api
@@ -60,6 +69,13 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+
+  RouteCalculator:
+    Type: AWS::Location::RouteCalculator
+    Properties:
+      CalculatorName: neptune-route-calculator
+      DataSource: Here
+      Description: Neptune walking route calculator
 
 Parameters:
   VapidPublicKey:
