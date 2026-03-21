@@ -19,6 +19,7 @@ import (
 	api "github.com/Neptune-Progate-Hackathon-AWS/back/internal/api"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/handler"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/repository"
+	"github.com/aws/aws-sdk-go-v2/service/rekognition"
 )
 
 func main() {
@@ -41,6 +42,9 @@ func main() {
 	// AWSクライアントとリポジトリの組み立て
 	dbClient := dynamodb.NewFromConfig(cfg)
 	s3Client := s3.NewFromConfig(cfg)
+	// ★追加：AWSの設定(cfg)を使って、Rekognition（AI）と通信するための専用クライアントを作成
+	rekognitionClient := rekognition.NewFromConfig(cfg)
+	
 	toiletRepo := repository.NewToiletRepository(dbClient)
 
 	bucketName := os.Getenv("S3_BUCKET_NAME")
@@ -48,7 +52,8 @@ func main() {
 		log.Fatal("S3_BUCKET_NAME 環境変数が設定されていません")
 	}
 
-	server := handler.NewServer(s3Client, bucketName, toiletRepo)
+	// ★変更：ハンドラー（Server）を生成する際、最後にrekognitionClientを渡して「AI担当」を任命する
+	server := handler.NewServer(s3Client, bucketName, toiletRepo, rekognitionClient)
 
 	// ルーター設定
 	r := chi.NewRouter()
