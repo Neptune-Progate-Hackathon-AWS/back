@@ -42,7 +42,15 @@ func main() {
 	}
 
 	// AWSクライアントとリポジトリの組み立て
-	dbClient := dynamodb.NewFromConfig(cfg)
+	var dbClient *dynamodb.Client
+	if endpoint := os.Getenv("DYNAMODB_ENDPOINT"); endpoint != "" {
+		dbClient = dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
+			o.BaseEndpoint = &endpoint
+		})
+		log.Printf("DynamoDB Local: %s", endpoint)
+	} else {
+		dbClient = dynamodb.NewFromConfig(cfg)
+	}
 	s3Client := s3.NewFromConfig(cfg)
 	toiletRepo := repository.NewToiletRepository(dbClient)
 	reportRepo := repository.NewReportRepository(dbClient)
@@ -50,7 +58,12 @@ func main() {
 
 	bucketName := os.Getenv("S3_BUCKET_NAME")
 	if bucketName == "" {
-		log.Fatal("S3_BUCKET_NAME 環境変数が設定されていません")
+		if os.Getenv("DYNAMODB_ENDPOINT") != "" {
+			bucketName = "local-dev-bucket"
+			log.Println("S3: using dummy bucket name for local dev")
+		} else {
+			log.Fatal("S3_BUCKET_NAME 環境変数が設定されていません")
+		}
 	}
 
 	// VAPID鍵が設定されている場合のみ PushService を有効化
@@ -65,21 +78,26 @@ func main() {
 	}
 
 	// NavigationService: Location Service + Bedrock
-	locationClient := location.NewFromConfig(cfg)
-
-	bedrockRegion := os.Getenv("BEDROCK_REGION")
-	if bedrockRegion == "" {
-		bedrockRegion = "us-east-1"
+	// ローカル開発時（DYNAMODB_ENDPOINT設定時）はLocation/Bedrockをスキップしモックルートを使用
+	var navigationService *service.NavigationService
+	if os.Getenv("DYNAMODB_ENDPOINT") != "" {
+		navigationService = service.NewNavigationService(nil, nil, "")
+		log.Println("Navigation: mock mode (no Location Service / Bedrock)")
+	} else {
+		locationClient := location.NewFromConfig(cfg)
+		bedrockRegion := os.Getenv("BEDROCK_REGION")
+		if bedrockRegion == "" {
+			bedrockRegion = "us-east-1"
+		}
+		bedrockClient := bedrockruntime.NewFromConfig(cfg, func(o *bedrockruntime.Options) {
+			o.Region = bedrockRegion
+		})
+		calculatorName := os.Getenv("ROUTE_CALCULATOR_NAME")
+		if calculatorName == "" {
+			calculatorName = "neptune-route-calculator"
+		}
+		navigationService = service.NewNavigationService(locationClient, bedrockClient, calculatorName)
 	}
-	bedrockClient := bedrockruntime.NewFromConfig(cfg, func(o *bedrockruntime.Options) {
-		o.Region = bedrockRegion
-	})
-
-	calculatorName := os.Getenv("ROUTE_CALCULATOR_NAME")
-	if calculatorName == "" {
-		calculatorName = "neptune-route-calculator"
-	}
-	navigationService := service.NewNavigationService(locationClient, bedrockClient, calculatorName)
 
 	server := handler.NewServer(s3Client, bucketName, toiletRepo, reportRepo, subscriptionRepo, pushSvc, navigationService)
 
@@ -88,7 +106,7 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://main.d3mags6w0gkuer.amplifyapp.com", "https://d337uiklw4m572.cloudfront.net"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "http://localhost:5177", "http://localhost:8080", "http://localhost:8081", "https://main.d3mags6w0gkuer.amplifyapp.com", "https://d337uiklw4m572.cloudfront.net"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
@@ -102,7 +120,12 @@ func main() {
 		chiLambda := chiadapter.New(r)
 		lambda.Start(chiLambda.ProxyWithContext)
 	} else {
-		addr := ":8080"
+		addr := ":" + func() string {
+			if p := os.Getenv("PORT"); p != "" {
+				return p
+			}
+			return "8080"
+		}()
 		fmt.Printf("Server listening on %s\n", addr)
 		log.Fatal(http.ListenAndServe(addr, r))
 	}

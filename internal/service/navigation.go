@@ -38,7 +38,12 @@ func NewNavigationService(locationClient *location.Client, bedrockClient *bedroc
 
 // CalculateRoute calculates a walking route from origin to destination using Amazon Location Service,
 // and generates a Japanese suggestion text using Amazon Bedrock Claude 3 Haiku.
+// When locationClient is nil (local dev), returns a mock straight-line route.
 func (s *NavigationService) CalculateRoute(ctx context.Context, originLat, originLng, destLat, destLng float64, destName string) (*RouteResult, error) {
+	if s.locationClient == nil {
+		return s.mockRoute(originLat, originLng, destLat, destLng, destName), nil
+	}
+
 	// Call Location Service — CRITICAL: coordinates are [longitude, latitude] order
 	out, err := s.locationClient.CalculateRoute(ctx, &location.CalculateRouteInput{
 		CalculatorName:      aws.String(s.calculatorName),
@@ -125,4 +130,32 @@ func (s *NavigationService) generateSuggestion(ctx context.Context, destName str
 		return fallback
 	}
 	return result.Content[0].Text
+}
+
+// mockRoute returns a straight-line route for local development without AWS services.
+func (s *NavigationService) mockRoute(originLat, originLng, destLat, destLng float64, destName string) *RouteResult {
+	// Haversine distance
+	dLat := (destLat - originLat) * math.Pi / 180
+	dLng := (destLng - originLng) * math.Pi / 180
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(originLat*math.Pi/180)*math.Cos(destLat*math.Pi/180)*math.Sin(dLng/2)*math.Sin(dLng/2)
+	distMeters := 6371000 * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	durationSec := distMeters / 1.4 // walking ~1.4 m/s
+
+	// Straight line with a few interpolation points
+	coords := make([][]float64, 5)
+	for i := 0; i < 5; i++ {
+		t := float64(i) / 4.0
+		coords[i] = []float64{
+			originLng + t*(destLng-originLng),
+			originLat + t*(destLat-originLat),
+		}
+	}
+
+	return &RouteResult{
+		DistanceMeters:  distMeters,
+		DurationSeconds: durationSec,
+		Coordinates:     coords,
+		SuggestionText:  fmt.Sprintf("%sまで徒歩約%.0f分（%.0fm）です。道なりにお進みください。", destName, math.Round(durationSec/60), distMeters),
+	}
 }
