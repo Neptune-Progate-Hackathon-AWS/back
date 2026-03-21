@@ -9,6 +9,12 @@ Globals:
     Runtime: provided.al2023
     Architectures:
       - arm64
+  Api:
+    Auth:
+      DefaultAuthorizer: CognitoAuthorizer
+      Authorizers:
+        CognitoAuthorizer:
+          UserPoolArn: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
 
 Resources:
   ApiFunction:
@@ -94,6 +100,10 @@ Resources:
       Description: Neptune walking route calculator
 
 Parameters:
+  CognitoUserPoolId:
+    Type: String
+    Default: "us-east-1_LZhN7yrXj"
+    Description: Cognito User Pool ID for API Gateway Authorizer
   VapidPublicKey:
     Type: String
     Default: ""
