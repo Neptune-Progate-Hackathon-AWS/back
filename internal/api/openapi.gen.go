@@ -117,6 +117,24 @@ func (e CreateToiletRequestToiletType) Valid() bool {
 	}
 }
 
+// Defines values for CreateVoteRequestToiletType.
+const (
+	CreateVoteRequestToiletTypeSeparated CreateVoteRequestToiletType = "separated"
+	CreateVoteRequestToiletTypeShared    CreateVoteRequestToiletType = "shared"
+)
+
+// Valid indicates whether the value is a known member of the CreateVoteRequestToiletType enum.
+func (e CreateVoteRequestToiletType) Valid() bool {
+	switch e {
+	case CreateVoteRequestToiletTypeSeparated:
+		return true
+	case CreateVoteRequestToiletTypeShared:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GeoJSONLineStringType.
 const (
 	LineString GeoJSONLineStringType = "LineString"
@@ -222,6 +240,24 @@ func (e ToiletToiletType) Valid() bool {
 	}
 }
 
+// Defines values for VoteToiletType.
+const (
+	VoteToiletTypeSeparated VoteToiletType = "separated"
+	VoteToiletTypeShared    VoteToiletType = "shared"
+)
+
+// Valid indicates whether the value is a known member of the VoteToiletType enum.
+func (e VoteToiletType) Valid() bool {
+	switch e {
+	case VoteToiletTypeSeparated:
+		return true
+	case VoteToiletTypeShared:
+		return true
+	default:
+		return false
+	}
+}
+
 // Coordinate defines model for Coordinate.
 type Coordinate struct {
 	// Lat 緯度
@@ -299,6 +335,17 @@ type CreateToiletRequestBrand string
 
 // CreateToiletRequestToiletType shared: 男女共用, separated: 男女別
 type CreateToiletRequestToiletType string
+
+// CreateVoteRequest defines model for CreateVoteRequest.
+type CreateVoteRequest struct {
+	ImageKey           *string                     `json:"imageKey,omitempty"`
+	Note               *string                     `json:"note,omitempty"`
+	RequiresPermission bool                        `json:"requiresPermission"`
+	ToiletType         CreateVoteRequestToiletType `json:"toiletType"`
+}
+
+// CreateVoteRequestToiletType defines model for CreateVoteRequest.ToiletType.
+type CreateVoteRequestToiletType string
 
 // Error defines model for Error.
 type Error struct {
@@ -407,6 +454,7 @@ type Toilet struct {
 	ImageUrl string  `json:"imageUrl"`
 	Lat      float64 `json:"lat"`
 	Lng      float64 `json:"lng"`
+	MyVote   *Vote   `json:"myVote,omitempty"`
 
 	// Name コンビニ店舗名
 	Name               string             `json:"name"`
@@ -417,6 +465,12 @@ type Toilet struct {
 	// ToiletType shared: 男女共用, separated: 男女別
 	ToiletType ToiletToiletType `json:"toiletType"`
 	UpdatedAt  *time.Time       `json:"updatedAt,omitempty"`
+
+	// VoteCount 投票数
+	VoteCount *int `json:"voteCount,omitempty"`
+
+	// Votes 投票一覧（getToilet で返す）
+	Votes *[]Vote `json:"votes,omitempty"`
 }
 
 // ToiletBrand defines model for Toilet.Brand.
@@ -424,6 +478,21 @@ type ToiletBrand string
 
 // ToiletToiletType shared: 男女共用, separated: 男女別
 type ToiletToiletType string
+
+// Vote defines model for Vote.
+type Vote struct {
+	CreatedAt          time.Time          `json:"createdAt"`
+	ImageUrl           *string            `json:"imageUrl,omitempty"`
+	Note               *string            `json:"note,omitempty"`
+	RequiresPermission bool               `json:"requiresPermission"`
+	ToiletId           openapi_types.UUID `json:"toiletId"`
+	ToiletType         VoteToiletType     `json:"toiletType"`
+	UpdatedAt          *time.Time         `json:"updatedAt,omitempty"`
+	UserId             string             `json:"userId"`
+}
+
+// VoteToiletType defines model for Vote.ToiletType.
+type VoteToiletType string
 
 // ToiletId defines model for toiletId.
 type ToiletId = openapi_types.UUID
@@ -467,6 +536,9 @@ type CreateToiletJSONRequestBody = CreateToiletRequest
 // CreateReportJSONRequestBody defines body for CreateReport for application/json ContentType.
 type CreateReportJSONRequestBody = CreateReportRequest
 
+// CreateVoteJSONRequestBody defines body for CreateVote for application/json ContentType.
+type CreateVoteJSONRequestBody = CreateVoteRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// S3 presigned URL を発行
@@ -502,6 +574,12 @@ type ServerInterface interface {
 	// トイレの報告件数を取得
 	// (GET /toilets/{toiletId}/reports/count)
 	GetReportCount(w http.ResponseWriter, r *http.Request, toiletId ToiletId)
+	// トイレの投票一覧を取得
+	// (GET /toilets/{toiletId}/votes)
+	ListVotes(w http.ResponseWriter, r *http.Request, toiletId ToiletId)
+	// トイレ情報に投票
+	// (POST /toilets/{toiletId}/votes)
+	CreateVote(w http.ResponseWriter, r *http.Request, toiletId ToiletId)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -571,6 +649,18 @@ func (_ Unimplemented) CreateReport(w http.ResponseWriter, r *http.Request, toil
 // トイレの報告件数を取得
 // (GET /toilets/{toiletId}/reports/count)
 func (_ Unimplemented) GetReportCount(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// トイレの投票一覧を取得
+// (GET /toilets/{toiletId}/votes)
+func (_ Unimplemented) ListVotes(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// トイレ情報に投票
+// (POST /toilets/{toiletId}/votes)
+func (_ Unimplemented) CreateVote(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -901,6 +991,68 @@ func (siw *ServerInterfaceWrapper) GetReportCount(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListVotes operation middleware
+func (siw *ServerInterfaceWrapper) ListVotes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "toiletId" -------------
+	var toiletId ToiletId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "toiletId", chi.URLParam(r, "toiletId"), &toiletId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "toiletId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CognitoAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListVotes(w, r, toiletId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateVote operation middleware
+func (siw *ServerInterfaceWrapper) CreateVote(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "toiletId" -------------
+	var toiletId ToiletId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "toiletId", chi.URLParam(r, "toiletId"), &toiletId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "toiletId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CognitoAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateVote(w, r, toiletId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1046,6 +1198,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/toilets/{toiletId}/reports/count", wrapper.GetReportCount)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/toilets/{toiletId}/votes", wrapper.ListVotes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/toilets/{toiletId}/votes", wrapper.CreateVote)
 	})
 
 	return r
@@ -1425,6 +1583,88 @@ func (response GetReportCount401JSONResponse) VisitGetReportCountResponse(w http
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListVotesRequestObject struct {
+	ToiletId ToiletId `json:"toiletId"`
+}
+
+type ListVotesResponseObject interface {
+	VisitListVotesResponse(w http.ResponseWriter) error
+}
+
+type ListVotes200JSONResponse struct {
+	Votes []Vote `json:"votes"`
+}
+
+func (response ListVotes200JSONResponse) VisitListVotesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListVotes401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListVotes401JSONResponse) VisitListVotesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListVotes404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListVotes404JSONResponse) VisitListVotesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateVoteRequestObject struct {
+	ToiletId ToiletId `json:"toiletId"`
+	Body     *CreateVoteJSONRequestBody
+}
+
+type CreateVoteResponseObject interface {
+	VisitCreateVoteResponse(w http.ResponseWriter) error
+}
+
+type CreateVote201JSONResponse Vote
+
+func (response CreateVote201JSONResponse) VisitCreateVoteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateVote400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateVote400JSONResponse) VisitCreateVoteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateVote401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateVote401JSONResponse) VisitCreateVoteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateVote404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateVote404JSONResponse) VisitCreateVoteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// S3 presigned URL を発行
@@ -1460,6 +1700,12 @@ type StrictServerInterface interface {
 	// トイレの報告件数を取得
 	// (GET /toilets/{toiletId}/reports/count)
 	GetReportCount(ctx context.Context, request GetReportCountRequestObject) (GetReportCountResponseObject, error)
+	// トイレの投票一覧を取得
+	// (GET /toilets/{toiletId}/votes)
+	ListVotes(ctx context.Context, request ListVotesRequestObject) (ListVotesResponseObject, error)
+	// トイレ情報に投票
+	// (POST /toilets/{toiletId}/votes)
+	CreateVote(ctx context.Context, request CreateVoteRequestObject) (CreateVoteResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -1809,66 +2055,128 @@ func (sh *strictHandler) GetReportCount(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// ListVotes operation middleware
+func (sh *strictHandler) ListVotes(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
+	var request ListVotesRequestObject
+
+	request.ToiletId = toiletId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListVotes(ctx, request.(ListVotesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListVotes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListVotesResponseObject); ok {
+		if err := validResponse.VisitListVotesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateVote operation middleware
+func (sh *strictHandler) CreateVote(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
+	var request CreateVoteRequestObject
+
+	request.ToiletId = toiletId
+
+	var body CreateVoteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateVote(ctx, request.(CreateVoteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateVote")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateVoteResponseObject); ok {
+		if err := validResponse.VisitCreateVoteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

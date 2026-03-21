@@ -74,6 +74,54 @@ func toAPIToilet(ctx context.Context, presignClient *s3.PresignClient, t model.T
 	return resp
 }
 
+// toAPIVote は内部の model.Vote を API の Vote 型に変換する。
+func toAPIVote(ctx context.Context, presignClient *s3.PresignClient, v model.Vote, bucketName string) api.Vote {
+	toiletUUID, _ := uuid.Parse(v.ToiletID)
+
+	resp := api.Vote{
+		ToiletId:           toiletUUID,
+		UserId:             v.UserID,
+		ToiletType:         api.VoteToiletType(v.ToiletType),
+		RequiresPermission: v.RequiresPermission,
+		CreatedAt:          v.CreatedAt,
+	}
+	if !v.UpdatedAt.IsZero() {
+		resp.UpdatedAt = &v.UpdatedAt
+	}
+	if v.Note != "" {
+		resp.Note = &v.Note
+	}
+	if v.ImageKey != "" {
+		imageURL := presignGetURL(ctx, presignClient, bucketName, v.ImageKey)
+		resp.ImageUrl = &imageURL
+	}
+	return resp
+}
+
+// aggregateVotes は投票一覧から多数決で toiletType と requiresPermission を集計する。
+func aggregateVotes(votes []model.Vote) (string, bool) {
+	sharedCount := 0
+	permCount := 0
+
+	for _, v := range votes {
+		if v.ToiletType == "shared" {
+			sharedCount++
+		}
+		if v.RequiresPermission {
+			permCount++
+		}
+	}
+
+	toiletType := "separated"
+	if sharedCount > len(votes)-sharedCount {
+		toiletType = "shared"
+	}
+
+	requiresPermission := permCount > len(votes)-permCount
+
+	return toiletType, requiresPermission
+}
+
 func derefString(p *string) string {
 	if p == nil {
 		return ""

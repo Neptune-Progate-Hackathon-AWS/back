@@ -14,6 +14,8 @@ servers:
 tags:
   - name: toilets
     description: トイレ情報の登録・取得
+  - name: votes
+    description: トイレ情報への投票
   - name: images
     description: 画像アップロード
   - name: notifications
@@ -218,6 +220,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Toilet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ============================================================
+  # 投票
+  # ============================================================
+  /toilets/{toiletId}/votes:
+    post:
+      tags: [votes]
+      summary: トイレ情報に投票
+      operationId: createVote
+      security:
+        - cognitoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/toiletId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVoteRequest"
+      responses:
+        "201":
+          description: 投票成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vote"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [votes]
+      summary: トイレの投票一覧を取得
+      operationId: listVotes
+      security:
+        - cognitoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/toiletId"
+      responses:
+        "200":
+          description: 投票一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [votes]
+                properties:
+                  votes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Vote"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -568,6 +627,55 @@ components:
           type: string
           description: 通知メッセージ（通知した場合のみ）
 
+    # --- 投票 ---
+    CreateVoteRequest:
+      type: object
+      required:
+        - toiletType
+        - requiresPermission
+      properties:
+        toiletType:
+          type: string
+          enum: [shared, separated]
+        requiresPermission:
+          type: boolean
+        note:
+          type: string
+          maxLength: 500
+        imageKey:
+          type: string
+
+    Vote:
+      type: object
+      required:
+        - toiletId
+        - userId
+        - toiletType
+        - requiresPermission
+        - createdAt
+      properties:
+        toiletId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        toiletType:
+          type: string
+          enum: [shared, separated]
+        requiresPermission:
+          type: boolean
+        note:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
     # --- 画像 ---
     PresignedUrlRequest:
       type: object
@@ -697,6 +805,16 @@ components:
           type: boolean
         note:
           type: string
+        voteCount:
+          type: integer
+          description: 投票数
+        votes:
+          type: array
+          description: 投票一覧（getToilet で返す）
+          items:
+            $ref: "#/components/schemas/Vote"
+        myVote:
+          $ref: "#/components/schemas/Vote"
         createdBy:
           type: string
           description: 投稿者ユーザーID

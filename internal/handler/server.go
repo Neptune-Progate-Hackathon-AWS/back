@@ -23,17 +23,19 @@ type Server struct {
 	presignClient     *s3.PresignClient
 	bucketName        string
 	toiletRepo        *repository.ToiletRepository
+	voteRepo          *repository.VoteRepository
 	reportRepo        *repository.ReportRepository
 	subscriptionRepo  *repository.SubscriptionRepository
 	pushService       *service.PushService
 	navigationService *service.NavigationService
 }
 
-func NewServer(s3Client *s3.Client, bucketName string, toiletRepo *repository.ToiletRepository, reportRepo *repository.ReportRepository, subscriptionRepo *repository.SubscriptionRepository, pushService *service.PushService, navigationService *service.NavigationService) *Server {
+func NewServer(s3Client *s3.Client, bucketName string, toiletRepo *repository.ToiletRepository, voteRepo *repository.VoteRepository, reportRepo *repository.ReportRepository, subscriptionRepo *repository.SubscriptionRepository, pushService *service.PushService, navigationService *service.NavigationService) *Server {
 	return &Server{
 		presignClient:     s3.NewPresignClient(s3Client),
 		bucketName:        bucketName,
 		toiletRepo:        toiletRepo,
+		voteRepo:          voteRepo,
 		reportRepo:        reportRepo,
 		subscriptionRepo:  subscriptionRepo,
 		pushService:       pushService,
@@ -69,13 +71,35 @@ func (s *Server) CreatePresignedUrl(ctx context.Context, request api.CreatePresi
 // POST /toilets
 func (s *Server) CreateToilet(ctx context.Context, request api.CreateToiletRequestObject) (api.CreateToiletResponseObject, error) {
 	t := toToilet(request.Body, uuid.New().String())
-	t.CreatedAt = time.Now()
+	now := time.Now()
+	t.CreatedAt = now
 
 	if err := s.toiletRepo.Save(ctx, t); err != nil {
 		return nil, fmt.Errorf("failed to create toilet: %w", err)
 	}
 
-	return api.CreateToilet201JSONResponse(toAPIToilet(ctx, s.presignClient, t, s.bucketName)), nil
+	// 初回投票を自動作成
+	userID := extractUserID(ctx)
+	vote := model.Vote{
+		ToiletID:           t.ToiletID,
+		UserID:             userID,
+		ToiletType:         t.ToiletType,
+		RequiresPermission: t.RequiresPermission,
+		Note:               t.Note,
+		ImageKey:           t.ImageKey,
+		CreatedAt:          now,
+	}
+	if err := s.voteRepo.Save(ctx, vote); err != nil {
+		return nil, fmt.Errorf("failed to create initial vote: %w", err)
+	}
+
+	apiToilet := toAPIToilet(ctx, s.presignClient, t, s.bucketName)
+	voteCount := 1
+	apiToilet.VoteCount = &voteCount
+	apiVote := toAPIVote(ctx, s.presignClient, vote, s.bucketName)
+	apiToilet.MyVote = &apiVote
+
+	return api.CreateToilet201JSONResponse(apiToilet), nil
 }
 
 // GET /toilets
@@ -98,7 +122,20 @@ func (s *Server) ListToilets(ctx context.Context, request api.ListToiletsRequest
 		if distance > searchRadius {
 			continue
 		}
-		apiToilets = append(apiToilets, toAPIToilet(ctx, s.presignClient, t, s.bucketName))
+
+		apiToilet := toAPIToilet(ctx, s.presignClient, t, s.bucketName)
+
+		// 投票集計
+		votes, err := s.voteRepo.FindByToiletID(ctx, t.ToiletID)
+		if err == nil && len(votes) > 0 {
+			count := len(votes)
+			apiToilet.VoteCount = &count
+			aggregatedType, aggregatedPerm := aggregateVotes(votes)
+			apiToilet.ToiletType = api.ToiletToiletType(aggregatedType)
+			apiToilet.RequiresPermission = aggregatedPerm
+		}
+
+		apiToilets = append(apiToilets, apiToilet)
 	}
 
 	return api.ListToilets200JSONResponse{Toilets: apiToilets}, nil
@@ -120,7 +157,35 @@ func (s *Server) GetToilet(ctx context.Context, request api.GetToiletRequestObje
 		}, nil
 	}
 
-	return api.GetToilet200JSONResponse(toAPIToilet(ctx, s.presignClient, *t, s.bucketName)), nil
+	apiToilet := toAPIToilet(ctx, s.presignClient, *t, s.bucketName)
+
+	// 投票集計
+	votes, err := s.voteRepo.FindByToiletID(ctx, t.ToiletID)
+	if err == nil && len(votes) > 0 {
+		count := len(votes)
+		apiToilet.VoteCount = &count
+		aggregatedType, aggregatedPerm := aggregateVotes(votes)
+		apiToilet.ToiletType = api.ToiletToiletType(aggregatedType)
+		apiToilet.RequiresPermission = aggregatedPerm
+
+		apiVotes := make([]api.Vote, 0, len(votes))
+		for _, v := range votes {
+			apiVotes = append(apiVotes, toAPIVote(ctx, s.presignClient, v, s.bucketName))
+		}
+		apiToilet.Votes = &apiVotes
+
+		// myVote
+		userID := extractUserID(ctx)
+		for _, v := range votes {
+			if v.UserID == userID {
+				myVote := toAPIVote(ctx, s.presignClient, v, s.bucketName)
+				apiToilet.MyVote = &myVote
+				break
+			}
+		}
+	}
+
+	return api.GetToilet200JSONResponse(apiToilet), nil
 }
 
 // DELETE /toilets/{toiletId}
@@ -252,6 +317,80 @@ func (s *Server) GetReportCount(ctx context.Context, request api.GetReportCountR
 	return api.GetReportCount200JSONResponse(api.ReportCountResponse{
 		Count: count,
 	}), nil
+}
+
+// POST /toilets/{toiletId}/votes
+func (s *Server) CreateVote(ctx context.Context, request api.CreateVoteRequestObject) (api.CreateVoteResponseObject, error) {
+	toiletID := request.ToiletId.String()
+
+	// トイレ存在確認
+	t, err := s.toiletRepo.FindByID(ctx, toiletID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get toilet: %w", err)
+	}
+	if t == nil {
+		return api.CreateVote404JSONResponse{
+			NotFoundJSONResponse: api.NotFoundJSONResponse(api.Error{
+				Code:    "NOT_FOUND",
+				Message: "指定されたトイレが見つかりません",
+			}),
+		}, nil
+	}
+
+	userID := extractUserID(ctx)
+	now := time.Now()
+
+	vote := model.Vote{
+		ToiletID:           toiletID,
+		UserID:             userID,
+		ToiletType:         string(request.Body.ToiletType),
+		RequiresPermission: request.Body.RequiresPermission,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}
+	if request.Body.Note != nil {
+		vote.Note = *request.Body.Note
+	}
+	if request.Body.ImageKey != nil {
+		vote.ImageKey = *request.Body.ImageKey
+	}
+
+	if err := s.voteRepo.Save(ctx, vote); err != nil {
+		return nil, fmt.Errorf("failed to save vote: %w", err)
+	}
+
+	return api.CreateVote201JSONResponse(toAPIVote(ctx, s.presignClient, vote, s.bucketName)), nil
+}
+
+// GET /toilets/{toiletId}/votes
+func (s *Server) ListVotes(ctx context.Context, request api.ListVotesRequestObject) (api.ListVotesResponseObject, error) {
+	toiletID := request.ToiletId.String()
+
+	// トイレ存在確認
+	t, err := s.toiletRepo.FindByID(ctx, toiletID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get toilet: %w", err)
+	}
+	if t == nil {
+		return api.ListVotes404JSONResponse{
+			NotFoundJSONResponse: api.NotFoundJSONResponse(api.Error{
+				Code:    "NOT_FOUND",
+				Message: "指定されたトイレが見つかりません",
+			}),
+		}, nil
+	}
+
+	votes, err := s.voteRepo.FindByToiletID(ctx, toiletID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list votes: %w", err)
+	}
+
+	apiVotes := make([]api.Vote, 0, len(votes))
+	for _, v := range votes {
+		apiVotes = append(apiVotes, toAPIVote(ctx, s.presignClient, v, s.bucketName))
+	}
+
+	return api.ListVotes200JSONResponse{Votes: apiVotes}, nil
 }
 
 // extractUserID はコンテキストからユーザーIDを取得する。

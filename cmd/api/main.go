@@ -53,6 +53,7 @@ func main() {
 	}
 	s3Client := s3.NewFromConfig(cfg)
 	toiletRepo := repository.NewToiletRepository(dbClient)
+	voteRepo := repository.NewVoteRepository(dbClient)
 	reportRepo := repository.NewReportRepository(dbClient)
 	subscriptionRepo := repository.NewSubscriptionRepository(dbClient)
 
@@ -99,7 +100,7 @@ func main() {
 		navigationService = service.NewNavigationService(locationClient, bedrockClient, calculatorName)
 	}
 
-	server := handler.NewServer(s3Client, bucketName, toiletRepo, reportRepo, subscriptionRepo, pushSvc, navigationService)
+	server := handler.NewServer(s3Client, bucketName, toiletRepo, voteRepo, reportRepo, subscriptionRepo, pushSvc, navigationService)
 
 	// ルーター設定
 	r := chi.NewRouter()
