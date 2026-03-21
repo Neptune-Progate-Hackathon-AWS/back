@@ -1363,6 +1363,15 @@ func (response CreateReport201JSONResponse) VisitCreateReportResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateReport400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateReport400JSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateReport401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateReport401JSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
@@ -1856,10 +1865,10 @@ var swaggerSpec = []string{
 	"s3zYqb8RPVRoLkCZ2J+8EdKUbeT3CAENqYB3qtpPkhER+j+Tdht13ZRt2WDATa1fAvMQtJk6AmeITl99",
 	"su4/f/ZhW4jKGIXxt/CGJL0pe2DbViO+3NWfyDWfIr2P7q+OI1iuLtx14evoBnAzmzYzubcxws6gECzv",
 	"j01VH40FL8GKcDL1qXBKUy/n5LQp1PMN4Y8mTxDSbWUfzoUXV8cZ4SrVsafuxB2KUQTvIHuyRaSno9k/",
-	"i8zDShL1l9GPOElwr4JzvITa5miDGH7h08P/0wcWoe/ql3He8Q4OmozuCMQFWuamwQcabXl3IWJBFVx7",
-	"OMqiouEPDlrEU7KHfpXfKJ7TtYyVJlfvP2KHaH8TuiVlICN9LCZEMrMiY0OjI5mU8vKxYGp9LK0pyavH",
-	"iTGCjWOjclhYlwNmzNmKZK770yxDbO7wwvvnjZV07d1gBNP8KofMc7bYRj1iYoKV6htzTo/LTkHrqfKw",
-	"xQ2Zcp40t3C/Yf/ODkaZvWuM5fCl4f8GAAD//16qnHYENwAA",
+	"i8zDShL1l9GPOElwr4JzvITa5qhTxlt7FX7h08P/awkW1O/qynEO9Q4+nYyuFcTFZuZywgcaoHnXJ2Jx",
+	"GNyUOMo6pOFvFFqEYLKHfpXfW57TtYyVJrf1P2Lnbn8TuiVlICN9LCZEMuYik0ajI5mU8vKxYNB9LK0p",
+	"yavHiTGCjWMDeViLlwMyzdmKZK77ay5DbG4KwyvrjcV37d1gatP8Kof/c7bY3j4ib4KV6nt5TlvMDk7r",
+	"2fWwKw7JdZ40t3CLYv/OzlKZvWsk5/Cl4f8GAAD//3HFEgg3NwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -167,6 +167,26 @@ func (s *Server) CreateReport(ctx context.Context, request api.CreateReportReque
 		}, nil
 	}
 
+	// 報告理由バリデーション（生成コードは Valid() を自動呼び出ししないため明示的に検証）
+	if !request.Body.Reason.Valid() {
+		return api.CreateReport400JSONResponse{
+			BadRequestJSONResponse: api.BadRequestJSONResponse(api.Error{
+				Code:    "INVALID_REASON",
+				Message: "無効な報告理由です",
+			}),
+		}, nil
+	}
+
+	// コメント文字数バリデーション（日本語文字列を考慮して rune 単位で計測）
+	if request.Body.Comment != nil && len([]rune(*request.Body.Comment)) > 500 {
+		return api.CreateReport400JSONResponse{
+			BadRequestJSONResponse: api.BadRequestJSONResponse(api.Error{
+				Code:    "COMMENT_TOO_LONG",
+				Message: "コメントは500文字以内で入力してください",
+			}),
+		}, nil
+	}
+
 	userID := extractUserID(ctx)
 
 	// 重複チェック
