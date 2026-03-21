@@ -20,6 +20,8 @@ tags:
     description: プッシュ通知・デバイス登録
   - name: location
     description: 位置情報チェック
+  - name: navigation
+    description: ナビゲーション
 
 paths:
   # ============================================================
@@ -274,6 +276,36 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   # ============================================================
+  # ナビゲーション
+  # ============================================================
+  /navigation/route:
+    post:
+      tags: [navigation]
+      summary: 徒歩ルートを計算
+      description: |
+        現在位置から目的地までの徒歩経路を計算し、GeoJSON LineString と AI 生成の案内文を返す。
+      operationId: calculateNavigationRoute
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NavigationRouteRequest"
+      responses:
+        "200":
+          description: ルート計算成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationRouteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ============================================================
   # 位置情報チェック（プッシュ通知トリガー）
   # ============================================================
   /location/check:
@@ -360,6 +392,65 @@ components:
   # スキーマ
   # ============================================================
   schemas:
+    # --- ナビゲーション ---
+    Coordinate:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          format: double
+          description: 緯度
+        lng:
+          type: number
+          format: double
+          description: 経度
+
+    NavigationRouteRequest:
+      type: object
+      required: [origin, destination, dest_name]
+      properties:
+        origin:
+          $ref: "#/components/schemas/Coordinate"
+        destination:
+          $ref: "#/components/schemas/Coordinate"
+        dest_name:
+          type: string
+          description: "目的地の名称（提案文生成に使用）"
+
+    GeoJSONLineString:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type:
+          type: string
+          enum: [LineString]
+        coordinates:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
+
+    NavigationRouteResponse:
+      type: object
+      required: [distance_meters, duration_seconds, polyline, suggestion_text]
+      properties:
+        distance_meters:
+          type: number
+          format: double
+          description: 距離（メートル）
+        duration_seconds:
+          type: number
+          format: double
+          description: 所要時間（秒）
+        polyline:
+          $ref: "#/components/schemas/GeoJSONLineString"
+        suggestion_text:
+          type: string
+          description: AI 生成の案内文
+
     # --- 共通 ---
     Error:
       type: object
