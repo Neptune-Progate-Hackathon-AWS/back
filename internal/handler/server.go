@@ -15,14 +15,25 @@ import (
 	api "github.com/Neptune-Progate-Hackathon-AWS/back/internal/api"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/model"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/repository"
+	"github.com/aws/aws-sdk-go-v2/service/rekognition"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/service"
 )
 
-// Server は oapi-codegen が生成した StrictServerInterface を実装する。
+// Server 構造体に rekognitionClient を「追加」する
 type Server struct {
 	presignClient     *s3.PresignClient
 	bucketName        string
 	toiletRepo        *repository.ToiletRepository
+	rekognitionClient *rekognition.Client // ★ここだけ追加！
+}
+
+// NewServer の引数と中身に rekognitionClient を「追加」する
+func NewServer(
+	s3Client *s3.Client, 
+	bucketName string, 
+	toiletRepo *repository.ToiletRepository,
+	rekognitionClient *rekognition.Client, 
+) *Server {
 	reportRepo        *repository.ReportRepository
 	subscriptionRepo  *repository.SubscriptionRepository
 	pushService       *service.PushService
@@ -34,6 +45,7 @@ func NewServer(s3Client *s3.Client, bucketName string, toiletRepo *repository.To
 		presignClient:     s3.NewPresignClient(s3Client),
 		bucketName:        bucketName,
 		toiletRepo:        toiletRepo,
+		rekognitionClient: rekognitionClient, // ★セットする処理を追加！
 		reportRepo:        reportRepo,
 		subscriptionRepo:  subscriptionRepo,
 		pushService:       pushService,
@@ -68,6 +80,28 @@ func (s *Server) CreatePresignedUrl(ctx context.Context, request api.CreatePresi
 
 // POST /toilets
 func (s *Server) CreateToilet(ctx context.Context, request api.CreateToiletRequestObject) (api.CreateToiletResponseObject, error) {
+	// --- ★ここから追加：AI画像審査の関所 ---
+	// 画像キー(ImageKey)が送られてきた場合のみ、保存前にAI審査を実施
+	if request.Body.ImageKey != nil && *request.Body.ImageKey != "" {
+		// rekognition.go で作ったAI審査関数を呼び出す
+		isToilet, err := s.isToiletImage(ctx, *request.Body.ImageKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate image: %w", err)
+		}
+		
+		if !isToilet {
+			// トイレ以外と判定されたら、DBに保存せずに400エラーで弾く
+			return api.CreateToilet400JSONResponse{
+				BadRequestJSONResponse: api.BadRequestJSONResponse(api.Error{
+					Code:    "BAD_REQUEST",
+					Message: "画像にトイレが検出されませんでした。別の画像を試してください。",
+				}),
+			}, nil
+		}
+	}
+	// --- ★追加ここまで ---
+
+	// 審査を通過した（または画像が送られなかった）場合のみ、ここから下の保存処理が実行される
 	t := toToilet(request.Body, uuid.New().String())
 	t.CreatedAt = time.Now()
 

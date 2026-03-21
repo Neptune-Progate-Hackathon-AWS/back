@@ -21,6 +21,7 @@ import (
 	api "github.com/Neptune-Progate-Hackathon-AWS/back/internal/api"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/handler"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/repository"
+	"github.com/aws/aws-sdk-go-v2/service/rekognition"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/service"
 )
 
@@ -52,6 +53,9 @@ func main() {
 		dbClient = dynamodb.NewFromConfig(cfg)
 	}
 	s3Client := s3.NewFromConfig(cfg)
+	// ★追加：AWSの設定(cfg)を使って、Rekognition（AI）と通信するための専用クライアントを作成
+	rekognitionClient := rekognition.NewFromConfig(cfg)
+	
 	toiletRepo := repository.NewToiletRepository(dbClient)
 	reportRepo := repository.NewReportRepository(dbClient)
 	subscriptionRepo := repository.NewSubscriptionRepository(dbClient)
@@ -99,6 +103,8 @@ func main() {
 		navigationService = service.NewNavigationService(locationClient, bedrockClient, calculatorName)
 	}
 
+	// ★変更：ハンドラー（Server）を生成する際、最後にrekognitionClientを渡して「AI担当」を任命する
+	server := handler.NewServer(s3Client, bucketName, toiletRepo, rekognitionClient)
 	server := handler.NewServer(s3Client, bucketName, toiletRepo, reportRepo, subscriptionRepo, pushSvc, navigationService)
 
 	// ルーター設定
