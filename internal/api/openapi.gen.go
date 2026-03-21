@@ -27,6 +27,48 @@ const (
 	CognitoAuthScopes = "cognitoAuth.Scopes"
 )
 
+// Defines values for CreateReportRequestReason.
+const (
+	CreateReportRequestReasonNotExists CreateReportRequestReason = "not_exists"
+	CreateReportRequestReasonOther     CreateReportRequestReason = "other"
+	CreateReportRequestReasonWrongInfo CreateReportRequestReason = "wrong_info"
+)
+
+// Valid indicates whether the value is a known member of the CreateReportRequestReason enum.
+func (e CreateReportRequestReason) Valid() bool {
+	switch e {
+	case CreateReportRequestReasonNotExists:
+		return true
+	case CreateReportRequestReasonOther:
+		return true
+	case CreateReportRequestReasonWrongInfo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateSubscriptionRequestPlatform.
+const (
+	CreateSubscriptionRequestPlatformAndroid CreateSubscriptionRequestPlatform = "android"
+	CreateSubscriptionRequestPlatformIos     CreateSubscriptionRequestPlatform = "ios"
+	CreateSubscriptionRequestPlatformWeb     CreateSubscriptionRequestPlatform = "web"
+)
+
+// Valid indicates whether the value is a known member of the CreateSubscriptionRequestPlatform enum.
+func (e CreateSubscriptionRequestPlatform) Valid() bool {
+	switch e {
+	case CreateSubscriptionRequestPlatformAndroid:
+		return true
+	case CreateSubscriptionRequestPlatformIos:
+		return true
+	case CreateSubscriptionRequestPlatformWeb:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateToiletRequestBrand.
 const (
 	CreateToiletRequestBrandDailyYamazaki CreateToiletRequestBrand = "daily_yamazaki"
@@ -96,30 +138,51 @@ func (e PresignedUrlRequestContentType) Valid() bool {
 	}
 }
 
+// Defines values for SubscriptionPlatform.
+const (
+	SubscriptionPlatformAndroid SubscriptionPlatform = "android"
+	SubscriptionPlatformIos     SubscriptionPlatform = "ios"
+	SubscriptionPlatformWeb     SubscriptionPlatform = "web"
+)
+
+// Valid indicates whether the value is a known member of the SubscriptionPlatform enum.
+func (e SubscriptionPlatform) Valid() bool {
+	switch e {
+	case SubscriptionPlatformAndroid:
+		return true
+	case SubscriptionPlatformIos:
+		return true
+	case SubscriptionPlatformWeb:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ToiletBrand.
 const (
-	ToiletBrandDailyYamazaki ToiletBrand = "daily_yamazaki"
-	ToiletBrandFamilyMart    ToiletBrand = "family_mart"
-	ToiletBrandLawson        ToiletBrand = "lawson"
-	ToiletBrandMiniStop      ToiletBrand = "mini_stop"
-	ToiletBrandOther         ToiletBrand = "other"
-	ToiletBrandSevenEleven   ToiletBrand = "seven_eleven"
+	DailyYamazaki ToiletBrand = "daily_yamazaki"
+	FamilyMart    ToiletBrand = "family_mart"
+	Lawson        ToiletBrand = "lawson"
+	MiniStop      ToiletBrand = "mini_stop"
+	Other         ToiletBrand = "other"
+	SevenEleven   ToiletBrand = "seven_eleven"
 )
 
 // Valid indicates whether the value is a known member of the ToiletBrand enum.
 func (e ToiletBrand) Valid() bool {
 	switch e {
-	case ToiletBrandDailyYamazaki:
+	case DailyYamazaki:
 		return true
-	case ToiletBrandFamilyMart:
+	case FamilyMart:
 		return true
-	case ToiletBrandLawson:
+	case Lawson:
 		return true
-	case ToiletBrandMiniStop:
+	case MiniStop:
 		return true
-	case ToiletBrandOther:
+	case Other:
 		return true
-	case ToiletBrandSevenEleven:
+	case SevenEleven:
 		return true
 	default:
 		return false
@@ -143,6 +206,39 @@ func (e ToiletToiletType) Valid() bool {
 		return false
 	}
 }
+
+// CreateReportRequest defines model for CreateReportRequest.
+type CreateReportRequest struct {
+	// Comment コメント（任意）
+	Comment *string `json:"comment,omitempty"`
+
+	// Reason 報告理由
+	Reason CreateReportRequestReason `json:"reason"`
+}
+
+// CreateReportRequestReason 報告理由
+type CreateReportRequestReason string
+
+// CreateReportResponse defines model for CreateReportResponse.
+type CreateReportResponse struct {
+	Message string `json:"message"`
+
+	// ReportCount 現在の報告件数
+	ReportCount int `json:"reportCount"`
+}
+
+// CreateSubscriptionRequest defines model for CreateSubscriptionRequest.
+type CreateSubscriptionRequest struct {
+	// Platform プラットフォーム種別
+	Platform CreateSubscriptionRequestPlatform `json:"platform"`
+
+	// Token デバイストークン。
+	// Web Push の場合は PushSubscription を JSON 文字列化したもの。
+	Token string `json:"token"`
+}
+
+// CreateSubscriptionRequestPlatform プラットフォーム種別
+type CreateSubscriptionRequestPlatform string
 
 // CreateToiletRequest defines model for CreateToiletRequest.
 type CreateToiletRequest struct {
@@ -186,6 +282,27 @@ type Error struct {
 	Message string `json:"message"`
 }
 
+// LocationCheckRequest defines model for LocationCheckRequest.
+type LocationCheckRequest struct {
+	// Lat 現在の緯度
+	Lat float64 `json:"lat"`
+
+	// Lng 現在の経度
+	Lng float64 `json:"lng"`
+}
+
+// LocationCheckResponse defines model for LocationCheckResponse.
+type LocationCheckResponse struct {
+	// Message 通知メッセージ（通知した場合のみ）
+	Message *string `json:"message,omitempty"`
+
+	// NearbyCount 周辺 1km 以内のトイレ件数
+	NearbyCount int `json:"nearbyCount"`
+
+	// Notified プッシュ通知を送信したか
+	Notified bool `json:"notified"`
+}
+
 // PresignedUrlRequest defines model for PresignedUrlRequest.
 type PresignedUrlRequest struct {
 	// ContentType アップロードする画像のMIMEタイプ
@@ -206,6 +323,22 @@ type PresignedUrlResponse struct {
 	// UploadUrl S3 presigned PUT URL
 	UploadUrl string `json:"uploadUrl"`
 }
+
+// ReportCountResponse defines model for ReportCountResponse.
+type ReportCountResponse struct {
+	// Count 報告件数
+	Count int `json:"count"`
+}
+
+// Subscription defines model for Subscription.
+type Subscription struct {
+	CreatedAt      time.Time            `json:"createdAt"`
+	Platform       SubscriptionPlatform `json:"platform"`
+	SubscriptionId openapi_types.UUID   `json:"subscriptionId"`
+}
+
+// SubscriptionPlatform defines model for Subscription.Platform.
+type SubscriptionPlatform string
 
 // Toilet defines model for Toilet.
 type Toilet struct {
@@ -265,14 +398,32 @@ type ListToiletsParams struct {
 // CreatePresignedUrlJSONRequestBody defines body for CreatePresignedUrl for application/json ContentType.
 type CreatePresignedUrlJSONRequestBody = PresignedUrlRequest
 
+// CheckLocationJSONRequestBody defines body for CheckLocation for application/json ContentType.
+type CheckLocationJSONRequestBody = LocationCheckRequest
+
+// CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
+type CreateSubscriptionJSONRequestBody = CreateSubscriptionRequest
+
 // CreateToiletJSONRequestBody defines body for CreateToilet for application/json ContentType.
 type CreateToiletJSONRequestBody = CreateToiletRequest
+
+// CreateReportJSONRequestBody defines body for CreateReport for application/json ContentType.
+type CreateReportJSONRequestBody = CreateReportRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// S3 presigned URL を発行
 	// (POST /images/presigned-url)
 	CreatePresignedUrl(w http.ResponseWriter, r *http.Request)
+	// 現在位置を送信し周辺トイレをチェック
+	// (POST /location/check)
+	CheckLocation(w http.ResponseWriter, r *http.Request)
+	// デバイストークンを登録
+	// (POST /subscriptions)
+	CreateSubscription(w http.ResponseWriter, r *http.Request)
+	// デバイストークンを削除
+	// (DELETE /subscriptions/{subscriptionId})
+	DeleteSubscription(w http.ResponseWriter, r *http.Request, subscriptionId openapi_types.UUID)
 	// 指定範囲内のトイレ一覧を取得（マップ表示用）
 	// (GET /toilets)
 	ListToilets(w http.ResponseWriter, r *http.Request, params ListToiletsParams)
@@ -285,6 +436,12 @@ type ServerInterface interface {
 	// トイレ詳細を取得
 	// (GET /toilets/{toiletId})
 	GetToilet(w http.ResponseWriter, r *http.Request, toiletId ToiletId)
+	// トイレの虚偽報告を送信
+	// (POST /toilets/{toiletId}/reports)
+	CreateReport(w http.ResponseWriter, r *http.Request, toiletId ToiletId)
+	// トイレの報告件数を取得
+	// (GET /toilets/{toiletId}/reports/count)
+	GetReportCount(w http.ResponseWriter, r *http.Request, toiletId ToiletId)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -294,6 +451,24 @@ type Unimplemented struct{}
 // S3 presigned URL を発行
 // (POST /images/presigned-url)
 func (_ Unimplemented) CreatePresignedUrl(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// 現在位置を送信し周辺トイレをチェック
+// (POST /location/check)
+func (_ Unimplemented) CheckLocation(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// デバイストークンを登録
+// (POST /subscriptions)
+func (_ Unimplemented) CreateSubscription(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// デバイストークンを削除
+// (DELETE /subscriptions/{subscriptionId})
+func (_ Unimplemented) DeleteSubscription(w http.ResponseWriter, r *http.Request, subscriptionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -321,6 +496,18 @@ func (_ Unimplemented) GetToilet(w http.ResponseWriter, r *http.Request, toiletI
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// トイレの虚偽報告を送信
+// (POST /toilets/{toiletId}/reports)
+func (_ Unimplemented) CreateReport(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// トイレの報告件数を取得
+// (GET /toilets/{toiletId}/reports/count)
+func (_ Unimplemented) GetReportCount(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ServerInterfaceWrapper converts contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler            ServerInterface
@@ -341,6 +528,77 @@ func (siw *ServerInterfaceWrapper) CreatePresignedUrl(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreatePresignedUrl(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CheckLocation operation middleware
+func (siw *ServerInterfaceWrapper) CheckLocation(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CognitoAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckLocation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSubscription operation middleware
+func (siw *ServerInterfaceWrapper) CreateSubscription(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CognitoAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSubscription(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSubscription operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSubscription(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "subscriptionId" -------------
+	var subscriptionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subscriptionId", chi.URLParam(r, "subscriptionId"), &subscriptionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subscriptionId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CognitoAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSubscription(w, r, subscriptionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -495,6 +753,68 @@ func (siw *ServerInterfaceWrapper) GetToilet(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// CreateReport operation middleware
+func (siw *ServerInterfaceWrapper) CreateReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "toiletId" -------------
+	var toiletId ToiletId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "toiletId", chi.URLParam(r, "toiletId"), &toiletId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "toiletId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CognitoAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateReport(w, r, toiletId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReportCount operation middleware
+func (siw *ServerInterfaceWrapper) GetReportCount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "toiletId" -------------
+	var toiletId ToiletId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "toiletId", chi.URLParam(r, "toiletId"), &toiletId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "toiletId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CognitoAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReportCount(w, r, toiletId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -612,6 +932,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/images/presigned-url", wrapper.CreatePresignedUrl)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/location/check", wrapper.CheckLocation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/subscriptions", wrapper.CreateSubscription)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/subscriptions/{subscriptionId}", wrapper.DeleteSubscription)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/toilets", wrapper.ListToilets)
 	})
 	r.Group(func(r chi.Router) {
@@ -622,6 +951,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/toilets/{toiletId}", wrapper.GetToilet)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/toilets/{toiletId}/reports", wrapper.CreateReport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/toilets/{toiletId}/reports/count", wrapper.GetReportCount)
 	})
 
 	return r
@@ -655,6 +990,101 @@ type CreatePresignedUrl401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response CreatePresignedUrl401JSONResponse) VisitCreatePresignedUrlResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CheckLocationRequestObject struct {
+	Body *CheckLocationJSONRequestBody
+}
+
+type CheckLocationResponseObject interface {
+	VisitCheckLocationResponse(w http.ResponseWriter) error
+}
+
+type CheckLocation200JSONResponse LocationCheckResponse
+
+func (response CheckLocation200JSONResponse) VisitCheckLocationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CheckLocation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CheckLocation401JSONResponse) VisitCheckLocationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSubscriptionRequestObject struct {
+	Body *CreateSubscriptionJSONRequestBody
+}
+
+type CreateSubscriptionResponseObject interface {
+	VisitCreateSubscriptionResponse(w http.ResponseWriter) error
+}
+
+type CreateSubscription201JSONResponse Subscription
+
+func (response CreateSubscription201JSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSubscription400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateSubscription400JSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSubscription401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateSubscription401JSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSubscriptionRequestObject struct {
+	SubscriptionId openapi_types.UUID `json:"subscriptionId"`
+}
+
+type DeleteSubscriptionResponseObject interface {
+	VisitDeleteSubscriptionResponse(w http.ResponseWriter) error
+}
+
+type DeleteSubscription204Response struct {
+}
+
+func (response DeleteSubscription204Response) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSubscription401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSubscription401JSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSubscription404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSubscription404JSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -791,11 +1221,91 @@ func (response GetToilet404JSONResponse) VisitGetToiletResponse(w http.ResponseW
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateReportRequestObject struct {
+	ToiletId ToiletId `json:"toiletId"`
+	Body     *CreateReportJSONRequestBody
+}
+
+type CreateReportResponseObject interface {
+	VisitCreateReportResponse(w http.ResponseWriter) error
+}
+
+type CreateReport201JSONResponse CreateReportResponse
+
+func (response CreateReport201JSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateReport401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateReport401JSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateReport404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateReport404JSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateReport409JSONResponse Error
+
+func (response CreateReport409JSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetReportCountRequestObject struct {
+	ToiletId ToiletId `json:"toiletId"`
+}
+
+type GetReportCountResponseObject interface {
+	VisitGetReportCountResponse(w http.ResponseWriter) error
+}
+
+type GetReportCount200JSONResponse ReportCountResponse
+
+func (response GetReportCount200JSONResponse) VisitGetReportCountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetReportCount401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetReportCount401JSONResponse) VisitGetReportCountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// S3 presigned URL を発行
 	// (POST /images/presigned-url)
 	CreatePresignedUrl(ctx context.Context, request CreatePresignedUrlRequestObject) (CreatePresignedUrlResponseObject, error)
+	// 現在位置を送信し周辺トイレをチェック
+	// (POST /location/check)
+	CheckLocation(ctx context.Context, request CheckLocationRequestObject) (CheckLocationResponseObject, error)
+	// デバイストークンを登録
+	// (POST /subscriptions)
+	CreateSubscription(ctx context.Context, request CreateSubscriptionRequestObject) (CreateSubscriptionResponseObject, error)
+	// デバイストークンを削除
+	// (DELETE /subscriptions/{subscriptionId})
+	DeleteSubscription(ctx context.Context, request DeleteSubscriptionRequestObject) (DeleteSubscriptionResponseObject, error)
 	// 指定範囲内のトイレ一覧を取得（マップ表示用）
 	// (GET /toilets)
 	ListToilets(ctx context.Context, request ListToiletsRequestObject) (ListToiletsResponseObject, error)
@@ -808,6 +1318,12 @@ type StrictServerInterface interface {
 	// トイレ詳細を取得
 	// (GET /toilets/{toiletId})
 	GetToilet(ctx context.Context, request GetToiletRequestObject) (GetToiletResponseObject, error)
+	// トイレの虚偽報告を送信
+	// (POST /toilets/{toiletId}/reports)
+	CreateReport(ctx context.Context, request CreateReportRequestObject) (CreateReportResponseObject, error)
+	// トイレの報告件数を取得
+	// (GET /toilets/{toiletId}/reports/count)
+	GetReportCount(ctx context.Context, request GetReportCountRequestObject) (GetReportCountResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -863,6 +1379,94 @@ func (sh *strictHandler) CreatePresignedUrl(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreatePresignedUrlResponseObject); ok {
 		if err := validResponse.VisitCreatePresignedUrlResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CheckLocation operation middleware
+func (sh *strictHandler) CheckLocation(w http.ResponseWriter, r *http.Request) {
+	var request CheckLocationRequestObject
+
+	var body CheckLocationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CheckLocation(ctx, request.(CheckLocationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CheckLocation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CheckLocationResponseObject); ok {
+		if err := validResponse.VisitCheckLocationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSubscription operation middleware
+func (sh *strictHandler) CreateSubscription(w http.ResponseWriter, r *http.Request) {
+	var request CreateSubscriptionRequestObject
+
+	var body CreateSubscriptionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSubscription(ctx, request.(CreateSubscriptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSubscription")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSubscriptionResponseObject); ok {
+		if err := validResponse.VisitCreateSubscriptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSubscription operation middleware
+func (sh *strictHandler) DeleteSubscription(w http.ResponseWriter, r *http.Request, subscriptionId openapi_types.UUID) {
+	var request DeleteSubscriptionRequestObject
+
+	request.SubscriptionId = subscriptionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSubscription(ctx, request.(DeleteSubscriptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSubscription")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSubscriptionResponseObject); ok {
+		if err := validResponse.VisitDeleteSubscriptionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -979,44 +1583,119 @@ func (sh *strictHandler) GetToilet(w http.ResponseWriter, r *http.Request, toile
 	}
 }
 
+// CreateReport operation middleware
+func (sh *strictHandler) CreateReport(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
+	var request CreateReportRequestObject
+
+	request.ToiletId = toiletId
+
+	var body CreateReportJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateReport(ctx, request.(CreateReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateReportResponseObject); ok {
+		if err := validResponse.VisitCreateReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReportCount operation middleware
+func (sh *strictHandler) GetReportCount(w http.ResponseWriter, r *http.Request, toiletId ToiletId) {
+	var request GetReportCountRequestObject
+
+	request.ToiletId = toiletId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReportCount(ctx, request.(GetReportCountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReportCount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReportCountResponseObject); ok {
+		if err := validResponse.VisitGetReportCountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/8xZ7VMbxxn/V262/dBOz0gU54u+4eBkSEjCYKg/UMaz6BZxju7Fe3u2ZUYznM40Ei+1",
-	"xyGmNLSuUwwyjkUIbk14MX/Mcjr5k/+Fzu6eTifphOjYJv5k3XH7vD/P7/esZ0Da0ExDRzqxQGoGmBBD",
-	"DRGE+RMx1Cwigwr7rSArjVWTqIYOUoC6RVpYp+6PgwNABip7ZUIyDWSgQw2BVOOoDDC6YasYKSBFsI1k",
-	"YKWnkQaZzCkDa5CAFLBtlX1JciY7axGs6hmQz+fZYcs0dAtxey5BZQTdsJFF2FPa0AnS+U9omlk1DZlx",
-	"iesWs3Amoua3GE2BFPhNouFrQvzVSlzG2MBCVauHW7SwTQtlWviFusWTvaXq83+DvAy+NMgnhq0r52TC",
-	"EXUPmQnOYm1jgTrr1FmghRJ1tqhzl5kzpkObTBtYvYPOwaTa1lKtfMii4j6l7iFgXwSHmMyPMYIEjfLc",
-	"RzJlYsNEmKgii1BRMLKs9qI6ObpXLc2214EMJjHU46qwsEvdXep+S90F6j7kNu1StwRkgHRbA6lxYKGb",
-	"SL+GsuwfIIMpqKnZ3DUNYgJkkIW3WFhkoKm6es0ihglkoED2RQ5q8A78WgUyMMg0wmAixixVgxn0Ocq1",
-	"W3aljzrPaOEH6rrUXaHuc5ZFt1TdK1LnmDoVf/nAc+/RAnsf53AWknah/sttb3+DeVHvG8WwJ7OoIUC3",
-	"tUmEuQA9EyPgP4tnFiD6+LSIe/srteKKd3+Jhfs21Mws4l8c8FTsXhADQjxI1b2F2k8vX2/OeaUlb38l",
-	"zmfdIHEanX9Qp3Jy8LD2zZa/vFMr/82be1L98S7LGrw9hPQMmQapj5LJGInB5LGGEdZUy1JFCzTL9/ZX",
-	"vG8fU2ePaTk69pfLtfKOd2+bOove8Vxtw6HOQsPaScPIIqgz4WLCjfL3rUKtaYiRkpL85Zfek11vbsdf",
-	"LsuShdh4JZE/FJ9ES5UfAjIIv4spunx0no6LLNX7Q5SNyH2TfbGRaMg2Jq+jNGE+ib5v69i0oXAnG1n+",
-	"U//Q4ED/6OBXX167PDLy1UhcPjVkWTDTcrBlrFJnUUxW6mxSZxV085db0hAd58MwRpaa0ZEyhrMdZ1Aw",
-	"JeOz19631FmlhYWgaZ3KF4NfXKaFY17gK5EM8nmQuG4iFn/xYOqN37fQpNk9pVHTuvsn0LHdQXTbZPke",
-	"jKn4sZGh6lrJm/+luvbo9er9N4dFf/PBm8NStI37Iv2k6gRlxFA4deAVtlivF/ZoYZOlmDEEFr43h8Xq",
-	"/Hd++bi6WqDOs+riN17l70JdW8nYZtaAzLE4BZJZ91waHhuVxkaGopPMxmrX6mmIj7giR2IVF2+BZqfC",
-	"WGe8OhcYSnPUVfpJE6dSIEEXiKoh0PnIpZhMimTVZueou8G5x3+pe8hpXjz+xWYr5IeiZ86SqxD0zo5u",
-	"HzSMnRGNOgGLYN1dGPKvhUKsU5X/r+ZaWjGyH5yCYWGBdYezaBu0tzGjqShtY5XkrjC6WkeBjK4So99m",
-	"FGIGTCKIEf6k7sxnV0dBK//t1+AdQ5c+Fgcl6iz6q/u1x4sCIKTBAWnU+BrpUkLqT6eRZYlHEJBknmiu",
-	"pBGfaUJMwbRVfcrownGdSthYJ0dL/lGl6s55/9qhhQfe3E51rUTdg+r6mv/iB2HPVTTJsWyFo+4O7+aX",
-	"1N1kAp1K//AgnS38WQ84vbNN3e844u1yYGZrRujolYHPJVp44H//ovrXJ17xqb9c5mepe59BpUB0zr2p",
-	"sy31Dw9Kn0KCbsGcRJ1KKKW/vqlgiTqb0mdXR5nQ6voa08/EsbCoJGjAKLcv1rvwnwKZmQogg5sIiz4C",
-	"vT3JniQrTMNEOjRVkAJ9PcmePiDzxZSnO8HLyUqEOHLBFrPLNARHYOOdr0us+YJlJgq3QeUhi1wylNw7",
-	"27biGEu+uWHY5ty6Df8xmXxPJgSkImb/a0Dw2MiQJGq/WrzvzT9isb+Y7O2kKLQ80bSwRhsTpMZbWnJ8",
-	"Ij8hA8vWNIhzrRyAGcBKktvACgdmrJCEWWCCiU6IqcHDlUExOR5SLTIafCM33X6Mt22ne8+9Yzfcwfid",
-	"xw0b4Vzj0kOMrjPcd3TCq7zcQWt9cYvVykflO9Uqhoi3NO+9uvvmsEjdx5wHF6n7TDC3ODswVFTbAlHV",
-	"CpqCdpaAVG+SEUoN3lY1BjMfiUdVF4+9cWyTpf6t6r2ZrkUqQSVIs7p1RED78qFhEGOY64BjVhzkxNzn",
-	"1Gf33mxtY/M8OkawbX/7rvf9z95f5poAhBvBoOPeQ+/VCk9zMF1rj8v++r6/XA5oetBZoa95ORyZp4KV",
-	"oFYBRjnlUHWIWtR5xd4XHOpsCN4pgIuDQX3d2j7ZX/BKS9R5Jl3pk9imHrOfrdBZRzjCfjuPpDq/5wjD",
-	"oxARDeTYWR/k/P1M+bi7sTNN+d53ZkK9pttLM9jQIpM82b0uI9ex51DK7dUjjI4t0MjsT8zUuWZeFGwW",
-	"CYLeXAED/H1YAS1QEOdV45NEyGZjhtbFmDun0vzr1fW3wk126GL3Q+Fl9dvGWpjcYRjEQuuniLyHaCbP",
-	"oRlC72tPd/0XP33YGRI2hmM8vhu4aHwzntgMY0Ox0+xB+l2Uuf9BGoLapAJ/D2TAiTLfVaxUIgFNtSdY",
-	"lXvShpa42ctTFSjueBdQB4KKv3rwevFn6h6ENjf9r5EF2hlJ/cK8dfI3zga8Lz+R/18AAAD//wt1XmfV",
-	"GgAA",
+	"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",
+	"AQAA//9iVxcXXi8AAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

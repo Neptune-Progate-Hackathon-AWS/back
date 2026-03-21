@@ -19,6 +19,7 @@ import (
 	api "github.com/Neptune-Progate-Hackathon-AWS/back/internal/api"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/handler"
 	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/repository"
+	"github.com/Neptune-Progate-Hackathon-AWS/back/internal/service"
 )
 
 func main() {
@@ -42,20 +43,33 @@ func main() {
 	dbClient := dynamodb.NewFromConfig(cfg)
 	s3Client := s3.NewFromConfig(cfg)
 	toiletRepo := repository.NewToiletRepository(dbClient)
+	reportRepo := repository.NewReportRepository(dbClient)
+	subscriptionRepo := repository.NewSubscriptionRepository(dbClient)
 
 	bucketName := os.Getenv("S3_BUCKET_NAME")
 	if bucketName == "" {
 		log.Fatal("S3_BUCKET_NAME 環境変数が設定されていません")
 	}
 
-	server := handler.NewServer(s3Client, bucketName, toiletRepo)
+	// VAPID鍵が設定されている場合のみ PushService を有効化
+	var pushSvc *service.PushService
+	vapidPub := os.Getenv("VAPID_PUBLIC_KEY")
+	vapidPriv := os.Getenv("VAPID_PRIVATE_KEY")
+	if vapidPub != "" && vapidPriv != "" {
+		pushSvc = service.NewPushService(vapidPub, vapidPriv)
+		log.Println("Web Push enabled")
+	} else {
+		log.Println("VAPID keys not set, Web Push disabled")
+	}
+
+	server := handler.NewServer(s3Client, bucketName, toiletRepo, reportRepo, subscriptionRepo, pushSvc)
 
 	// ルーター設定
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:5173", "https://main.d3mags6w0gkuer.amplifyapp.com", "https://d337uiklw4m572.cloudfront.net"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://main.d3mags6w0gkuer.amplifyapp.com", "https://d337uiklw4m572.cloudfront.net"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,

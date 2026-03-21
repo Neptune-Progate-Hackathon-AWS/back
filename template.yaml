@@ -19,9 +19,15 @@ Resources:
       Environment:
         Variables:
           S3_BUCKET_NAME: neptune-toilet-images
+          VAPID_PUBLIC_KEY: !Ref VapidPublicKey
+          VAPID_PRIVATE_KEY: !Ref VapidPrivateKey
       Policies:
         - DynamoDBCrudPolicy:
             TableName: ToiletsTable
+        - DynamoDBCrudPolicy:
+            TableName: ReportsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SubscriptionsTable
         - S3CrudPolicy:
             BucketName: neptune-toilet-images
       Events:
@@ -33,6 +39,38 @@ Resources:
 
     Metadata:
       BuildMethod: makefile
+
+  SubscriptionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: SubscriptionsTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: subscriptionId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: subscriptionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: userId-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+Parameters:
+  VapidPublicKey:
+    Type: String
+    Default: ""
+    Description: VAPID public key for Web Push
+  VapidPrivateKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: VAPID private key for Web Push
 
 Outputs:
   ApiUrl:

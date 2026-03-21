@@ -16,6 +16,10 @@ tags:
     description: トイレ情報の登録・取得
   - name: images
     description: 画像アップロード
+  - name: notifications
+    description: プッシュ通知・デバイス登録
+  - name: location
+    description: 位置情報チェック
 
 paths:
   # ============================================================
@@ -120,6 +124,65 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  # ============================================================
+  # トイレ虚偽報告
+  # ============================================================
+  /toilets/{toiletId}/reports:
+    post:
+      tags: [toilets]
+      summary: トイレの虚偽報告を送信
+      description: |
+        トイレが存在しない等の虚偽報告を送信する。
+        同一ユーザーの重複報告は 409 Conflict を返す。
+        報告が3件に達したらトイレは自動削除される。
+      operationId: createReport
+      security:
+        - cognitoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/toiletId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportRequest"
+      responses:
+        "201":
+          description: 報告成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateReportResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: 重複報告
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /toilets/{toiletId}/reports/count:
+    get:
+      tags: [toilets]
+      summary: トイレの報告件数を取得
+      operationId: getReportCount
+      security:
+        - cognitoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/toiletId"
+      responses:
+        "200":
+          description: 報告件数
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportCountResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /toilets/{toiletId}:
     delete:
       tags: [toilets]
@@ -155,6 +218,90 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  # ============================================================
+  # プッシュ通知サブスクリプション
+  # ============================================================
+  /subscriptions:
+    post:
+      tags: [notifications]
+      summary: デバイストークンを登録
+      description: |
+        プッシュ通知を受け取るためのデバイストークンを登録する。
+        iOS / Android / Web (Web Push) に対応。
+      operationId: createSubscription
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionRequest"
+      responses:
+        "201":
+          description: 登録成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /subscriptions/{subscriptionId}:
+    delete:
+      tags: [notifications]
+      summary: デバイストークンを削除
+      operationId: deleteSubscription
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: サブスクリプションID
+      responses:
+        "204":
+          description: 削除成功
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ============================================================
+  # 位置情報チェック（プッシュ通知トリガー）
+  # ============================================================
+  /location/check:
+    post:
+      tags: [location]
+      summary: 現在位置を送信し周辺トイレをチェック
+      description: |
+        クライアントから定期的に現在位置を送信する。
+        周辺 1km 以内にトイレが 0 件の場合、プッシュ通知で警告を送信し
+        レスポンスでも通知済みフラグを返す。
+      operationId: checkLocation
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationCheckRequest"
+      responses:
+        "200":
+          description: チェック結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationCheckResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
 components:
   # ============================================================
@@ -202,6 +349,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    Conflict:
+      description: リソースの競合
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
 
   # ============================================================
   # スキーマ
@@ -226,6 +379,101 @@ components:
         message:
           type: string
           example: "処理が完了しました"
+
+    # --- 報告 ---
+    CreateReportRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum:
+            - not_exists
+            - wrong_info
+            - other
+          description: "報告理由"
+        comment:
+          type: string
+          maxLength: 500
+          description: "コメント（任意）"
+
+    CreateReportResponse:
+      type: object
+      required: [message, reportCount]
+      properties:
+        message:
+          type: string
+          example: "報告を受け付けました"
+        reportCount:
+          type: integer
+          description: 現在の報告件数
+
+    ReportCountResponse:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+          description: 報告件数
+
+    # --- プッシュ通知 ---
+    CreateSubscriptionRequest:
+      type: object
+      required: [platform, token]
+      properties:
+        platform:
+          type: string
+          enum:
+            - ios
+            - android
+            - web
+          description: "プラットフォーム種別"
+        token:
+          type: string
+          description: |
+            デバイストークン。
+            Web Push の場合は PushSubscription を JSON 文字列化したもの。
+
+    Subscription:
+      type: object
+      required: [subscriptionId, platform, createdAt]
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [ios, android, web]
+        createdAt:
+          type: string
+          format: date-time
+
+    LocationCheckRequest:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          format: double
+          description: 現在の緯度
+        lng:
+          type: number
+          format: double
+          description: 現在の経度
+
+    LocationCheckResponse:
+      type: object
+      required: [nearbyCount, notified]
+      properties:
+        nearbyCount:
+          type: integer
+          description: 周辺 1km 以内のトイレ件数
+        notified:
+          type: boolean
+          description: プッシュ通知を送信したか
+        message:
+          type: string
+          description: 通知メッセージ（通知した場合のみ）
 
     # --- 画像 ---
     PresignedUrlRequest:
