@@ -27,7 +27,7 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: ToiletsTable
         - DynamoDBCrudPolicy:
-            TableName: ReportsTable
+            TableName: !Ref ReportsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref SubscriptionsTable
         - S3CrudPolicy:
@@ -69,6 +69,22 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+
+  ReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ReportsTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: toiletId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: toiletId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
 
   RouteCalculator:
     Type: AWS::Location::RouteCalculator
