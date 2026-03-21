@@ -59,14 +59,16 @@
 
 ### フロントエンド
 
-| 項目                 | 技術                                     |
-| -------------------- | ---------------------------------------- |
-| 言語                 | TypeScript                               |
-| フレームワーク       | Next.js                                  |
-| ホスティング         | AWS Amplify Hosting                      |
-| 認証                 | Amplify Auth（Cognito SDK 直接）         |
-| 地図                 | Amazon Location Service + MapLibre GL JS |
-| API クライアント生成 | Orval（OpenAPI → TypeScript）            |
+| 項目                 | 技術                                       |
+| -------------------- | ------------------------------------------ |
+| 言語                 | TypeScript                                 |
+| ツールチェーン       | Vite+（Vite / Rolldown / Vitest / Oxlint） |
+| ルーター             | Orbit Router                               |
+| UI ライブラリ        | kasumi/ui                                  |
+| ホスティング         | S3 + CloudFront                            |
+| 認証                 | Amplify Auth（Cognito SDK 直接）           |
+| 地図                 | Amazon Location Service + MapLibre GL JS   |
+| API クライアント生成 | Orval（OpenAPI → TypeScript）              |
 
 ### バックエンド
 
@@ -80,9 +82,9 @@
 
 ### ローカル開発
 
-| 項目           | 技術                              |
-| -------------- | --------------------------------- |
-| DB             | DynamoDB Local（docker-compose）  |
+| 項目 | 技術                             |
+| ---- | -------------------------------- |
+| DB   | DynamoDB Local（docker-compose） |
 
 ---
 
@@ -102,7 +104,7 @@
     │               ├── DynamoDB（データストア）
     │               └── S3（画像保存）
     │
-    └── Amplify Hosting（フロントエンド）
+    └── S3 + CloudFront（フロントエンド）
 ```
 
 ### MVP後に追加
@@ -111,52 +113,6 @@
 - Location Service（経路計算）
 - Bedrock（AI提案文生成）
 - EventBridge → End User Messaging Push（プッシュ通知）
-
-### デプロイ
-
-| 項目           | 技術                                |
-| -------------- | ----------------------------------- |
-| IaC            | AWS SAM（template.yaml）            |
-| ビルド         | `sam build`（Makefile経由でGoクロスコンパイル） |
-| デプロイ       | `sam deploy`                        |
-| リージョン     | us-east-1                           |
-| スタック名     | neptune-toilet-api                  |
-
-#### デプロイ手順
-
-```bash
-# ビルド
-sam build
-
-# デプロイ（初回は --guided）
-sam deploy --guided
-
-# 2回目以降（samconfig.toml に設定が保存される）
-sam deploy
-```
-
-#### 環境変数（Lambda）
-
-| 変数名          | 値                      | 設定場所         |
-| --------------- | ----------------------- | ---------------- |
-| S3_BUCKET_NAME  | neptune-toilet-images   | template.yaml    |
-
-#### S3バケットCORS設定
-
-フロントからの presigned URL PUT のため、S3バケットにCORS設定が必要：
-
-```bash
-aws s3api put-bucket-cors --bucket neptune-toilet-images --cors-configuration '{
-  "CORSRules": [{
-    "AllowedHeaders": ["*"],
-    "AllowedMethods": ["PUT"],
-    "AllowedOrigins": ["http://localhost:3000"],
-    "ExposeHeaders": []
-  }]
-}'
-```
-
-> 本番フロントのURLが決まったら `AllowedOrigins` に追加すること。
 
 ---
 
@@ -211,20 +167,20 @@ aws s3api put-bucket-cors --bucket neptune-toilet-images --cors-configuration '{
 
 ### MVP
 
-| 画面                | パス         | 概要                                           |
-| ------------------- | ------------ | ---------------------------------------------- |
-| ログイン / 新規登録 | /auth        | Cognito SDK で認証                             |
+| 画面                | パス         | 概要                                                 |
+| ------------------- | ------------ | ---------------------------------------------------- |
+| ログイン / 新規登録 | /auth        | Cognito SDK で認証                                   |
 | マップ（ホーム）    | /            | トイレをピン表示。「今すぐトイレに行きたい！」ボタン |
-| トイレ登録          | /toilets/new | コンビニ情報 + トイレ情報を入力して送信        |
-| トイレ詳細          | /toilets/:id | トイレ情報表示                                 |
+| トイレ登録          | /toilets/new | コンビニ情報 + トイレ情報を入力して送信              |
+| トイレ詳細          | /toilets/:id | トイレ情報表示                                       |
 
 ### MVP後
 
-| 画面                | パス                    | 概要               |
-| ------------------- | ----------------------- | ------------------ |
-| トイレなし報告      | /toilets/:id/report     | 証拠画像 + 理由入力 |
-| ナビゲーション      | /navigation             | ルート提案 + 地図ナビ |
-| 通知設定            | /settings/notifications | プッシュ通知 ON/OFF |
+| 画面           | パス                    | 概要                  |
+| -------------- | ----------------------- | --------------------- |
+| トイレなし報告 | /toilets/:id/report     | 証拠画像 + 理由入力   |
+| ナビゲーション | /navigation             | ルート提案 + 地図ナビ |
+| 通知設定       | /settings/notifications | プッシュ通知 ON/OFF   |
 
 ---
 
@@ -243,11 +199,11 @@ aws s3api put-bucket-cors --bucket neptune-toilet-images --cors-configuration '{
 
 ### MVP後
 
-| メソッド | パス                    | 概要                 | 認証 |
-| -------- | ----------------------- | -------------------- | ---- |
-| GET      | /toilets/:id/reports    | 報告一覧             | 要   |
-| POST     | /toilets/:id/reports    | トイレなし報告       | 要   |
-| POST     | /navigation/route       | ルート提案           | 要   |
-| PUT      | /notifications/device   | デバイス登録         | 要   |
-| DELETE   | /notifications/device   | デバイス削除         | 要   |
-| POST     | /notifications/location | 位置情報送信         | 要   |
+| メソッド | パス                    | 概要           | 認証 |
+| -------- | ----------------------- | -------------- | ---- |
+| GET      | /toilets/:id/reports    | 報告一覧       | 要   |
+| POST     | /toilets/:id/reports    | トイレなし報告 | 要   |
+| POST     | /navigation/route       | ルート提案     | 要   |
+| PUT      | /notifications/device   | デバイス登録   | 要   |
+| DELETE   | /notifications/device   | デバイス削除   | 要   |
+| POST     | /notifications/location | 位置情報送信   | 要   |
