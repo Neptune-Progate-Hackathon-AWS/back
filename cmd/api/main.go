@@ -79,25 +79,26 @@ func main() {
 	}
 
 	// NavigationService: Location Service + Bedrock
-	// ローカル開発時（DYNAMODB_ENDPOINT設定時）はLocation/Bedrockをスキップしモックルートを使用
 	var navigationService *service.NavigationService
-	if os.Getenv("DYNAMODB_ENDPOINT") != "" {
+	if os.Getenv("NAVIGATION_MOCK") == "true" {
 		navigationService = service.NewNavigationService(nil, nil, "")
-		log.Println("Navigation: mock mode (no Location Service / Bedrock)")
+		log.Println("Navigation: mock mode")
 	} else {
 		locationClient := location.NewFromConfig(cfg)
-		bedrockRegion := os.Getenv("BEDROCK_REGION")
-		if bedrockRegion == "" {
-			bedrockRegion = "us-east-1"
-		}
-		bedrockClient := bedrockruntime.NewFromConfig(cfg, func(o *bedrockruntime.Options) {
-			o.Region = bedrockRegion
-		})
 		calculatorName := os.Getenv("ROUTE_CALCULATOR_NAME")
 		if calculatorName == "" {
 			calculatorName = "neptune-route-calculator"
 		}
+		// Bedrock は任意（suggestion_text の自然言語生成用）
+		var bedrockClient *bedrockruntime.Client
+		bedrockRegion := os.Getenv("BEDROCK_REGION")
+		if bedrockRegion != "" {
+			bedrockClient = bedrockruntime.NewFromConfig(cfg, func(o *bedrockruntime.Options) {
+				o.Region = bedrockRegion
+			})
+		}
 		navigationService = service.NewNavigationService(locationClient, bedrockClient, calculatorName)
+		log.Printf("Navigation: AWS Location Service (calculator=%s)", calculatorName)
 	}
 
 	server := handler.NewServer(s3Client, bucketName, toiletRepo, voteRepo, reportRepo, subscriptionRepo, pushSvc, navigationService)
